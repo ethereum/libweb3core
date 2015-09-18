@@ -7,6 +7,13 @@
 
 
 
+
+
+
+
+
+
+
 cmake_minimum_required(VERSION 3.0.0)
 
 set(ETH_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/../webthree-helpers/cmake" CACHE PATH "The path to the cmake directory")
