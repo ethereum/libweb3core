@@ -63,9 +63,9 @@ private:
 	int getRefCount(h256 const& _h) const;
 	void increaseRefCount(h256 const& _h,ldb::WriteBatch& _batch) const;
 	void decreaseRefCount(h256 const& _h,ldb::WriteBatch& _batch) const;
-	void setRefCount(h256 const& _h, int _refCount = 1) const;
+	void setRefCount(h256 const& _h, ldb::WriteBatch& _batch, int _refCount = 1) const;
 
-	void safeWrite(ldb::WriteBatch& _batch);
+	void safeWrite(ldb::WriteBatch& _batch) const;
 
 	static std::map<u256, std::set<h256> > m_deathrow;
 	static std::map<u256, std::unordered_map<h256, uint > > m_changes;

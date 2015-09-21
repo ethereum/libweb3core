@@ -48,7 +48,7 @@ class WriteBatchNoter: public ldb::WriteBatch::Handler
 	virtual void Delete(ldb::Slice const& _key) { cnote << "Delete" << toHex(bytesConstRef(_key)); }
 };
 
-void OverlayDB::safeWrite(ldb::WriteBatch& _batch)
+void OverlayDB::safeWrite(ldb::WriteBatch& _batch) const
 {
 	for (unsigned i = 0; i < 10; ++i)
 	{
@@ -84,14 +84,12 @@ int OverlayDB::getRefCount(h256 const& _h) const
 	return stoi(refCount);
 }
 
-void OverlayDB::setRefCount(h256 const& _h, int _refCount) const
+void OverlayDB::setRefCount(h256 const& _h, ldb::WriteBatch& _batch, int _refCount) const
 {
 	bytes b = _h.asBytes();
 	b.push_back(254); // for refcount
 
-	if (m_db)
-		m_db->Put(m_writeOptions, bytesConstRef(&b), to_string(_refCount));
-
+	_batch.Put(bytesConstRef(&b), to_string(_refCount));
 	m_changes[m_blockNumber][_h] = 2;
 }
 
@@ -233,8 +231,12 @@ std::string OverlayDB::lookup(h256 const& _h) const
 	if (blockNumber)
 		m_deathrow[blockNumber].erase(_h);
 
+	ldb::WriteBatch batch;
+
 	if (!getRefCount(_h))
-		setRefCount(_h);
+		setRefCount(_h, batch);
+
+	safeWrite(batch);
 
 	return ret;
 }
@@ -263,8 +265,12 @@ bool OverlayDB::exists(h256 const& _h) const
 	if (blockNumber)
 		m_deathrow[blockNumber].erase(_h);
 
+	ldb::WriteBatch batch;
+
 	if (!getRefCount(_h))
-		setRefCount(_h);
+		setRefCount(_h, batch);
+
+	safeWrite(batch);
 
 	return !ret.empty();
 }
