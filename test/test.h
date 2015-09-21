@@ -13,6 +13,7 @@ namespace test
 	{
 	public:
 		bool performance = false;
+		bool nonetwork = false;
 
 		/// Get reference to options
 		/// The first time used, options are parsed

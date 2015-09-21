@@ -13,10 +13,11 @@ add_subdirectory(libdevcrypto)
 add_subdirectory(libp2p)
 
 set(SRC_LIST ${SRC_LIST} ${SRCTEST})
+MESSAGE(${SRC_LIST})
 
 file(GLOB HEADERS "*.h")
 add_executable(testweb3core ${SRC_LIST} ${HEADERS})
-eth_use(testweb3core REQUIRED Eth::ethereum Eth::testutils)
+eth_use(testweb3core REQUIRED Dev::devcrypto Dev::devcore Dev::p2p)
 
 target_link_libraries(testweb3core ${Boost_UNIT_TEST_FRAMEWORK_LIBRARIES})
 

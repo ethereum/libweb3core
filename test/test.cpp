@@ -8,7 +8,6 @@
 #include <test/test.h>
 #include <libdevcore/Log.h>
 
-
 using namespace std;
 
 namespace dev
@@ -42,6 +41,9 @@ Options::Options()
 		auto arg = std::string{argv[i]};
 		if (arg == "--performance")
 			performance = true;
+		else if (arg == "--nonetwork")
+			nonetwork = true;
+
 	}
 }
 
