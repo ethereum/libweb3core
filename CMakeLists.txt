@@ -31,3 +31,4 @@ if (NOT EMSCRIPTEN)
 	endif()
 endif()
 
+add_subdirectory(test)
