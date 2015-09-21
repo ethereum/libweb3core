@@ -106,8 +106,8 @@ public:
 	void insert(bytesConstRef _key, bytesConstRef _value);
 	void remove(bytes const& _key) { remove(&_key); }
 	void remove(bytesConstRef _key);
-	bool contains(bytes const& _key) { return contains(&_key); }
-	bool contains(bytesConstRef _key) { return !at(_key).empty(); }
+	bool contains(bytes const& _key) const { return contains(&_key); }
+	bool contains(bytesConstRef _key) const { return !at(_key).empty(); }
 
 	class iterator
 	{
