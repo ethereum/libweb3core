@@ -291,6 +291,7 @@ public:
 
 	bytesConstRef ref() const { return FixedHash<T>::ref(); }
 	byte const* data() const { return FixedHash<T>::data(); }
+	byte* data() { return FixedHash<T>::data(); }
 
 	static SecureFixedHash<T> random() { SecureFixedHash<T> ret; ret.randomize(s_fixedHashEngine); return ret; }
 	using FixedHash<T>::firstBitSet;
