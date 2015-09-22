@@ -31,4 +31,6 @@ if (NOT EMSCRIPTEN)
 	endif()
 endif()
 
-add_subdirectory(test)
+if (TESTS)
+	add_subdirectory(test)
+endif()
