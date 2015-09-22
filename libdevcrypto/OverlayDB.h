@@ -26,8 +26,9 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Log.h>
 #include <libdevcore/MemoryDB.h>
+//#include <libdevcore/Guards.h>
 
-#define PRUNING 100
+#define PRUNING 10
 
 namespace dev
 {
@@ -46,7 +47,6 @@ public:
 	std::string lookup(h256 const& _h) const;
 	bool exists(h256 const& _h) const;
 	void kill(h256 const& _h);
-	bool deepkill(h256 const& _h);
 
 	bytes lookupAux(h256 const& _h) const;
 
@@ -61,7 +61,7 @@ private:
 #ifdef PRUNING
 	u256 isInDeathRow(h256 const& _h) const;
 	int getRefCount(h256 const& _h) const;
-	void increaseRefCount(h256 const& _h,ldb::WriteBatch& _batch) const;
+	void increaseRefCount(h256 const& _h, ldb::WriteBatch& _batch, int _addedRefCount = 1) const;
 	void decreaseRefCount(h256 const& _h,ldb::WriteBatch& _batch) const;
 	void setRefCount(h256 const& _h, ldb::WriteBatch& _batch, int _refCount = 1) const;
 

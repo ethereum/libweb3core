@@ -59,7 +59,6 @@ void OverlayDB::commit(u256 _blockNumber)
 	if (m_db)
 	{
 		ldb::WriteBatch batch;
-//		cnote << "Committing nodes to disk DB:";
 
 		// check if we need to revert changes in refCount (chain reorg)
 		if (_blockNumber && m_changes.find(_blockNumber) != m_changes.end())
@@ -90,14 +89,14 @@ void OverlayDB::commit(u256 _blockNumber)
 				if (i.second.second)
 				{
 					batch.Put(ldb::Slice((char const*)i.first.data(), i.first.size), ldb::Slice(i.second.first.data(), i.second.first.size()));
-					increaseRefCount(i.first, batch);
+					increaseRefCount(i.first, batch, i.second.second);
 
 					h256 _h(i.first);
 					u256 blockNumber = isInDeathRow(_h);
-					if (blockNumber)
+					if (blockNumber != 0)
 						m_deathrow[blockNumber].erase(_h);
 				}
-//				cnote << i.first << "#" << m_main[i.first].second;
+				//cnote << i.first << "#" << m_main[i.first].second;
 			}
 			for (auto const& i: m_aux)
 				if (i.second.second)
@@ -110,19 +109,20 @@ void OverlayDB::commit(u256 _blockNumber)
 		}
 
 		// pruning
-		if (OverlayDB::m_blockNumber > PRUNING)
-		{
-			for (auto& _h : m_deathrow[OverlayDB::m_blockNumber - PRUNING])
-				batch.Delete(ldb::Slice((char const*)_h.data(), 32));
-			m_deathrow.erase(OverlayDB::m_blockNumber - PRUNING);
-			m_changes.erase(OverlayDB::m_blockNumber - PRUNING);
-		}
-
-		safeWrite(batch);
-
 #if DEV_GUARDED_DB
 		DEV_WRITE_GUARDED(x_this)
 #endif
+		{
+			if (OverlayDB::m_blockNumber > PRUNING)
+			{
+				for (auto& _h : m_deathrow[OverlayDB::m_blockNumber - PRUNING])
+					batch.Delete(ldb::Slice((char const*)_h.data(), 32));
+				m_deathrow.erase(OverlayDB::m_blockNumber - PRUNING);
+				m_changes.erase(OverlayDB::m_blockNumber - PRUNING);
+
+			}
+			safeWrite(batch);
+		}
 		{
 			m_aux.clear();
 			m_main.clear();
@@ -149,33 +149,50 @@ bytes OverlayDB::lookupAux(h256 const& _h) const
 void OverlayDB::rollback()
 {
 #if DEV_GUARDED_DB
-	WriteGuard l(x_this);
+	DEV_WRITE_GUARDED(x_this)
 #endif
-	m_main.clear();
+	{
+		m_main.clear();
+	}
 }
 
 std::string OverlayDB::lookup(h256 const& _h) const
 {
-	std::string ret = MemoryDB::lookup(_h);
-	if (ret.empty() && m_db)
-		m_db->Get(m_readOptions, ldb::Slice((char const*)_h.data(), 32), &ret);
-	else
-		return ret;
+	std::string ret;
+#if DEV_GUARDED_DB
+	DEV_READ_GUARDED(x_this)
+#endif
+	{
+		ret = MemoryDB::lookup(_h);
+
+		if (ret.empty() && m_db)
+			m_db->Get(m_readOptions, ldb::Slice((char const*)_h.data(), 32), &ret);
+		else
+			return ret;
+	}
+
 	if (ret.empty())
 		return ret;
 
-	// pruning
-	u256 blockNumber = isInDeathRow(_h);
-	if (blockNumber)
-		m_deathrow[blockNumber].erase(_h);
 
 	ldb::WriteBatch batch;
 
 	if (!getRefCount(_h))
 	{
-		cout << "lookup request for: " << _h << " with refcount 0\n";
-		setRefCount(_h, batch);
-		safeWrite(batch);
+		cwarn << "lookup request for: " << _h << " with refcount 0\n This is probably a critical trie issue";
+
+#if DEV_GUARDED_DB
+		DEV_WRITE_GUARDED(x_this)
+#endif
+		{
+			setRefCount(_h, batch);
+			safeWrite(batch);
+
+			// pruning
+			u256 blockNumber = isInDeathRow(_h);
+			if (blockNumber)
+				m_deathrow[blockNumber].erase(_h);
+		}
 	}
 
 	return ret;
@@ -183,7 +200,7 @@ std::string OverlayDB::lookup(h256 const& _h) const
 
 u256 OverlayDB::isInDeathRow(h256 const& _h) const
 {
-	for (auto& i : m_deathrow)
+	for (auto const& i : OverlayDB::m_deathrow)
 	{
 		if (i.second.find(_h) != i.second.end())
 			return i.first;
@@ -199,24 +216,34 @@ bool OverlayDB::exists(h256 const& _h) const
 
 	std::string ret;
 
-	if (m_db)
-		m_db->Get(m_readOptions, ldb::Slice((char const*)_h.data(), 32), &ret);
+#if DEV_GUARDED_DB
+	DEV_READ_GUARDED(x_this)
+#endif
+	{
+		if (m_db)
+			m_db->Get(m_readOptions, ldb::Slice((char const*)_h.data(), 32), &ret);
+	}
 
 	if (ret.empty())
 		return false;
-
-	// pruning
-	u256 blockNumber = isInDeathRow(_h);
-	if (blockNumber)
-		m_deathrow[blockNumber].erase(_h);
 
 	ldb::WriteBatch batch;
 
 	if (!getRefCount(_h))
 	{
 		cout << "exists request for: " << _h << " with refcount 0\n";
-		setRefCount(_h, batch);
-		safeWrite(batch);
+#if DEV_GUARDED_DB
+		DEV_WRITE_GUARDED(x_this);
+#endif
+		{
+			setRefCount(_h, batch);
+			safeWrite(batch);
+
+			// pruning
+			u256 blockNumber = isInDeathRow(_h);
+			if (blockNumber)
+				m_deathrow[blockNumber].erase(_h);
+		}
 	}
 
 	return !ret.empty();
@@ -227,9 +254,13 @@ void OverlayDB::kill(h256 const& _h)
 	if (!MemoryDB::kill(_h))
 	{
 		std::string ret;
-
-		if (m_db)
-			m_db->Get(m_readOptions, ldb::Slice((char const*)_h.data(), 32), &ret);
+#if DEV_GUARDED_DB
+		DEV_READ_GUARDED(x_this)
+#endif
+		{
+			if (m_db)
+				m_db->Get(m_readOptions, ldb::Slice((char const*)_h.data(), 32), &ret);
+		}
 
 
 		// No point node ref decreasing for EmptyTrie since we never bother incrementing it in the first place for
@@ -238,26 +269,35 @@ void OverlayDB::kill(h256 const& _h)
 			cnote << "Decreasing DB node ref count below zero with no DB node. Probably have a corrupt Trie." << _h;
 		else
 		{
-			// decrease refcount
-			bytes b = _h.asBytes();
-			b.push_back(254); // for refcount
-
-			int refCountNumber = getRefCount(_h);
-
-			if (refCountNumber)
+#if DEV_GUARDED_DB
+			DEV_WRITE_GUARDED(x_this);
+#endif
 			{
-				refCountNumber--;
-				if (m_db)
-					m_db->Put(m_writeOptions, bytesConstRef(&b), to_string(refCountNumber));
-				m_changes[m_blockNumber][_h] = 1;
-			}
-			else
-				cout << "REFCOUNT is ZERO, that means we kill a node which is not used by anyone!? Who is asking for that node?\n";
+				// decrease refcount
+				ldb::WriteBatch batch;
+				decreaseRefCount(_h, batch);
+				safeWrite(batch);
 
-			if (!refCountNumber && !isInDeathRow(_h))
-			{
-				//cout << "added " << _h << " to deathrow in block: " << OverlayDB::m_blockNumber << endl;
-				m_deathrow[OverlayDB::m_blockNumber].insert(_h);
+				//			bytes b = _h.asBytes();
+				//			b.push_back(254); // for refcount
+
+				//			int refCountNumber = getRefCount(_h);
+
+				//			if (refCountNumber)
+				//			{
+				//				refCountNumber--;
+				//				if (m_db)
+				//					m_db->Put(m_writeOptions, bytesConstRef(&b), to_string(refCountNumber));
+				//				m_changes[m_blockNumber][_h] = 1;
+				//			}
+				//			else
+				//				cout << "REFCOUNT is ZERO, that means we kill a node which is not used by anyone!? Who is asking for that node?\n";
+
+				if (!getRefCount(_h) && !isInDeathRow(_h))
+				{
+					//cout << "added " << _h << " to deathrow in block: " << OverlayDB::m_blockNumber << endl;
+					m_deathrow[OverlayDB::m_blockNumber].insert(_h);
+				}
 			}
 		}
 	}
@@ -265,35 +305,46 @@ void OverlayDB::kill(h256 const& _h)
 
 void OverlayDB::safeWrite(ldb::WriteBatch& _batch) const
 {
-	for (unsigned i = 0; i < 10; ++i)
+#if DEV_GUARDED_DB
+	DEV_WRITE_GUARDED(x_this);
+#endif
 	{
-
-		ldb::Status o = ldb::Status::OK();
-		if (m_db)
-			o = m_db->Write(m_writeOptions, &_batch);
-		if (o.ok())
-			break;
-		if (i == 9)
+		for (unsigned i = 0; i < 10; ++i)
 		{
-			cwarn << "Fail writing to state database. Bombing out.";
-			exit(-1);
+
+			ldb::Status o = ldb::Status::OK();
+			if (m_db)
+				o = m_db->Write(m_writeOptions, &_batch);
+			if (o.ok())
+				break;
+			if (i == 9)
+			{
+				cwarn << "Fail writing to state database. Bombing out.";
+				exit(-1);
+			}
+			cwarn << "Error writing to state database: " << o.ToString();
+			WriteBatchNoter n;
+			_batch.Iterate(&n);
+			cwarn << "Sleeping for" << (i + 1) << "seconds, then retry writing.";
+			this_thread::sleep_for(chrono::seconds(i + 1));
 		}
-		cwarn << "Error writing to state database: " << o.ToString();
-		WriteBatchNoter n;
-		_batch.Iterate(&n);
-		cwarn << "Sleeping for" << (i + 1) << "seconds, then retry writing.";
-		this_thread::sleep_for(chrono::seconds(i + 1));
 	}
 }
 
 int OverlayDB::getRefCount(h256 const& _h) const
 {
-	bytes b = _h.asBytes();
-	b.push_back(254); // for refcount
+	string refCount;
+#if DEV_GUARDED_DB
+	DEV_READ_GUARDED(x_this);
+#endif
+	{
+		bytes b = _h.asBytes();
+		b.push_back(254); // for refcount
 
-	// get refcount
-	if (m_db)
-		m_db->Get(m_readOptions, bytesConstRef(&b), &refCount);
+		// get refcount
+		if (m_db)
+			m_db->Get(m_readOptions, bytesConstRef(&b), &refCount);
+	}
 
 	if (refCount.empty())
 		return 0;
@@ -305,20 +356,28 @@ void OverlayDB::setRefCount(h256 const& _h, ldb::WriteBatch& _batch, int _refCou
 {
 	bytes b = _h.asBytes();
 	b.push_back(254); // for refcount
-
-	_batch.Put(bytesConstRef(&b), to_string(_refCount));
-	m_changes[m_blockNumber][_h] = 2;
+#if DEV_GUARDED_DB
+	DEV_WRITE_GUARDED(x_this);
+#endif
+	{
+		_batch.Put(bytesConstRef(&b), to_string(_refCount));
+		m_changes[m_blockNumber][_h] = 2;
+	}
 }
 
-void OverlayDB::increaseRefCount(h256 const& _h,ldb::WriteBatch& _batch) const
+void OverlayDB::increaseRefCount(h256 const& _h,ldb::WriteBatch& _batch, int _addedRefCount) const
 {
 	bytes b = _h.asBytes();
 	b.push_back(254); // for refcount
 
-	int refCountNumber = getRefCount(_h) + 1;
-
-	_batch.Put(bytesConstRef(&b), to_string(refCountNumber));
-	m_changes[m_blockNumber][_h] = 2;
+	int refCountNumber = getRefCount(_h) + _addedRefCount;
+#if DEV_GUARDED_DB
+	DEV_WRITE_GUARDED(x_this);
+#endif
+	{
+		_batch.Put(bytesConstRef(&b), to_string(refCountNumber));
+		m_changes[m_blockNumber][_h] = 2;
+	}
 }
 
 void OverlayDB::decreaseRefCount(h256 const& _h,ldb::WriteBatch& _batch) const
@@ -327,25 +386,19 @@ void OverlayDB::decreaseRefCount(h256 const& _h,ldb::WriteBatch& _batch) const
 	b.push_back(254); // for refcount
 
 	int refCountNumber = getRefCount(_h);
-	refCountNumber = refCountNumber ? refCountNumber - 1 : refCountNumber;
-
-	_batch.Put(bytesConstRef(&b), to_string(refCountNumber));
-	m_changes[m_blockNumber][_h] = 1;
-}
-
-bool OverlayDB::deepkill(h256 const& _h)
-{
-	// kill in memoryDB
-	kill(_h);
-
-	//kill in overlayDB
-	ldb::Status s = m_db->Delete(m_writeOptions, ldb::Slice((char const*)_h.data(), 32));
-	if (s.ok())
-		return true;
+	if (refCountNumber)
+		refCountNumber--;
 	else
-		return false;
-}
+		cwarn << "REFCOUNT is ZERO, that means we kill a node which is not used by anyone!? Who is asking for that node? Probably a critical trie issue.\n";
 
+#if DEV_GUARDED_DB
+	DEV_WRITE_GUARDED(x_this);
+#endif
+	{
+		_batch.Put(bytesConstRef(&b), to_string(refCountNumber));
+		m_changes[m_blockNumber][_h] = 1;
+	}
+}
 }
 
 #endif // ETH_EMSCRIPTEN
