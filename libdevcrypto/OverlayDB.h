@@ -43,6 +43,7 @@ public:
 
 	void commit(u256 _blockNumber);
 	void rollback();
+	void insert(h256 const& _h, bytesConstRef _v);
 
 	std::string lookup(h256 const& _h) const;
 	bool exists(h256 const& _h) const;

@@ -249,6 +249,17 @@ bool OverlayDB::exists(h256 const& _h) const
 	return !ret.empty();
 }
 
+void OverlayDB::insert(h256 const& _h, bytesConstRef _v){
+	MemoryDB::insert(_h, _v);
+	ldb::WriteBatch batch;
+	increaseRefCount(_h, batch);
+	safeWrite(batch);
+	u256 blockNumber = isInDeathRow(_h);
+	if (blockNumber != 0)
+		m_deathrow[blockNumber].erase(_h);
+}
+
+
 void OverlayDB::kill(h256 const& _h)
 {
 	if (!MemoryDB::kill(_h))
