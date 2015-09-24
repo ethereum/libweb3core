@@ -269,12 +269,8 @@ void OverlayDB::insert(h256 const& _h, bytesConstRef _v, bool _istorage){
 //	}
 //	else
 //		cout << "is state insert: " << _h << endl;
-	bytes b = i.first.asBytes();
-	if (_istorage)
-		b.push_back(255);	// for aux
 
 	if (m_TheType[_h] && m_TheType[_h] != _istorage + (unsigned)1)
-	{
 		cwarn << "overwrite typem, hash collision? " << _h;
 	m_TheType[_h] = _istorage ? 2 : 1;
 
