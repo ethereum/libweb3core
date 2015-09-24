@@ -35,8 +35,9 @@ h256 const EmptyTrie = sha3(rlp(""));
 u256 OverlayDB::m_blockNumber = 0;
 std::map<u256, std::set<h256> > OverlayDB::m_deathrow = {};
 std::map<u256, std::unordered_map<h256, uint > > OverlayDB::m_changes = {};
-std::map<h256, unsigned > OverlayDB::m_TheRefCount = {};
+std::map<h256, int > OverlayDB::m_TheRefCount = {};
 std::map<h256, unsigned > OverlayDB::m_TheType = {};
+std::set<h256> OverlayDB::m_Roots = {};
 
 class WriteBatchNoter: public ldb::WriteBatch::Handler
 {
@@ -50,13 +51,15 @@ OverlayDB::~OverlayDB()
 		cnote << "Closing state DB";
 }
 
-void OverlayDB::commit(u256 _blockNumber)
+void OverlayDB::commit(u256 _blockNumber, h256 _root)
 {
 #ifdef PRUNING
 	OverlayDB::m_blockNumber = _blockNumber;
 #else
 	void(_blockNumber);
 #endif
+
+	m_Roots.insert(_root);
 
 	if (m_db)
 	{
@@ -89,20 +92,34 @@ void OverlayDB::commit(u256 _blockNumber)
 			for (auto const& i: m_main)
 			{
 				h256 _h(i.first);
-				if (i.second.second)
+				if (i.second.second > 0)
 				{
 					batch.Put(ldb::Slice((char const*)i.first.data(), i.first.size), ldb::Slice(i.second.first.data(), i.second.first.size()));
-//					increaseRefCount(i.first, batch, i.second.second);
+					increaseRefCount(i.first, batch, i.second.second);
 
-//					u256 blockNumber = isInDeathRow(_h);
-//					if (blockNumber != 0)
-//						m_deathrow[blockNumber].erase(_h);
+					u256 blockNumber = isInDeathRow(_h);
+					if (blockNumber != 0)
+						m_deathrow[blockNumber].erase(_h);
 				}
-//				else if (!decreaseRefCount(_h, batch) && !isInDeathRow(_h))
-//				{
-//					cout << "added " << _h << " to deathrow in block: " << OverlayDB::m_blockNumber << endl;
-//					m_deathrow[OverlayDB::m_blockNumber].insert(_h);
-//				}
+				else if(i.second.second < 0)  // (!decreaseRefCount(_h, batch) && !isInDeathRow(_h))
+				{
+					int newRefCount = increaseRefCount(_h, batch, i.second.second);
+					if (newRefCount == 0 && m_Roots.find(_h) == m_Roots.end())
+					{
+						//cout << "added " << _h << " to deathrow in block: " << OverlayDB::m_blockNumber << endl;
+						m_deathrow[OverlayDB::m_blockNumber].insert(_h);
+					}
+					else if (newRefCount < 0)
+						cwarn << "REFCOUNT is ZERO, that means we kill a node which is not used by anyone!? Who is asking for that node? Probably a critical trie issue. Hash";
+
+				}
+				else if (_blockNumber == 0)
+				{
+					batch.Put(ldb::Slice((char const*)i.first.data(), i.first.size), ldb::Slice(i.second.first.data(), i.second.first.size()));
+					increaseRefCount(i.first, batch, i.second.second);
+				}
+
+//					cout << "refcount unchanged, do nothing" << endl;
 				//cnote << i.first << "#" << m_main[i.first].second;
 			}
 			for (auto const& i: m_aux)
@@ -271,21 +288,21 @@ void OverlayDB::insert(h256 const& _h, bytesConstRef _v, bool _istorage){
 //		cout << "is state insert: " << _h << endl;
 
 	if (m_TheType[_h] && m_TheType[_h] != _istorage + (unsigned)1)
-		cwarn << "overwrite typem, hash collision? " << _h;
+		cwarn << "overwrite typem, collision of trees? " << _h;
 	m_TheType[_h] = _istorage ? 2 : 1;
 
 	MemoryDB::insert(_h, _v);
-	if (_h == EmptyTrie)
-		return;
+//	if (_h == EmptyTrie)
+//		return;
 
 
 
-	ldb::WriteBatch batch;
-	assert(increaseRefCount(_h, batch));
-	safeWrite(batch);
-	u256 blockNumber = isInDeathRow(_h);
-	if (blockNumber != 0)
-		m_deathrow[blockNumber].erase(_h);
+//	ldb::WriteBatch batch;
+//	assert(increaseRefCount(_h, batch));
+//	safeWrite(batch);
+//	u256 blockNumber = isInDeathRow(_h);
+//	if (blockNumber != 0)
+//		m_deathrow[blockNumber].erase(_h);
 }
 
 
@@ -293,6 +310,7 @@ void OverlayDB::kill(h256 const& _h)
 {
 	if (!MemoryDB::kill(_h) && _h != EmptyTrie)
 	{
+		cwarn << "should never arrive here!";
 		std::string ret;
 #if DEV_GUARDED_DB
 		DEV_READ_GUARDED(x_this)
@@ -414,22 +432,25 @@ int OverlayDB::increaseRefCount(h256 const& _h,ldb::WriteBatch& _batch, int _add
 		_batch.Put(bytesConstRef(&b), to_string(refCountNumber));
 		m_changes[m_blockNumber][_h] = 2;
 	}
-	m_TheRefCount[_h] += 1;
-	if (m_TheRefCount[_h] != (unsigned)refCountNumber)
+	m_TheRefCount[_h] += _addedRefCount;
+	if (m_TheRefCount[_h] != refCountNumber)
 		cwarn << "refcounts don't match!!! " << _h << " type: " << m_TheType[_h];
 	return refCountNumber;
 }
 
-int OverlayDB::decreaseRefCount(h256 const& _h,ldb::WriteBatch& _batch) const
+int OverlayDB::decreaseRefCount(h256 const& _h, ldb::WriteBatch& _batch, int _decRefCount) const
 {
 	bytes b = _h.asBytes();
 	b.push_back(254); // for refcount
 
 	int refCountNumber = getRefCount(_h);
-	if (refCountNumber)
-		refCountNumber--;
+	if (refCountNumber < _decRefCount)
+		refCountNumber -= _decRefCount ;
 	else
+	{
 		cwarn << "REFCOUNT is ZERO, that means we kill a node which is not used by anyone!? Who is asking for that node? Probably a critical trie issue. Hash: " << _h;
+		refCountNumber = 0;
+	}
 
 #if DEV_GUARDED_DB
 	DEV_WRITE_GUARDED(x_this);
@@ -439,7 +460,7 @@ int OverlayDB::decreaseRefCount(h256 const& _h,ldb::WriteBatch& _batch) const
 		m_changes[m_blockNumber][_h] = 1;
 	}
 	m_TheRefCount[_h] = m_TheRefCount[_h] ? m_TheRefCount[_h] - 1 : m_TheRefCount[_h];
-	if (m_TheRefCount[_h] != (unsigned)refCountNumber)
+	if (m_TheRefCount[_h] != refCountNumber)
 		cwarn << "refcounts don't match!!! " << _h << " type: " << m_TheType[_h];
 	return refCountNumber;
 }

@@ -29,6 +29,7 @@
 #include "SHA3.h"
 #include "MemoryDB.h"
 #include "TrieCommon.h"
+#include <libdevcrypto/OverlayDB.h>
 
 namespace dev
 {
@@ -98,7 +99,7 @@ public:
 	/// True if the trie is initialised but empty (i.e. that the DB contains the root node which is empty).
 	bool isEmpty() const { return m_root == c_shaNull && node(m_root).size(); }
 
-	h256 const& root() const { if (node(m_root).empty()) BOOST_THROW_EXCEPTION(BadRoot(m_root)); /*std::cout << "Returning root as " << ret << " (really " << m_root << ")" << std::endl;*/ return m_root; }	// patch the root in the case of the empty trie. TODO: handle this properly.
+	h256 const& root() const {assert(!node(m_root).empty());  if (node(m_root).empty()) {std::cout << "BadRoot: " << m_root << " blockNumber:" << dev::OverlayDB::m_blockNumber << std::endl; BOOST_THROW_EXCEPTION(BadRoot(m_root));} /*std::cout << "Returning root as " << ret << " (really " << m_root << ")" << std::endl;*/ return m_root; }	// patch the root in the case of the empty trie. TODO: handle this properly.
 
 	std::string at(bytes const& _key) const { return at(&_key); }
 	std::string at(bytesConstRef _key) const;

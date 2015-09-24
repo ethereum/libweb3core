@@ -91,7 +91,7 @@ void MemoryDB::insert(h256 const& _h, bytesConstRef _v, bool _dummy)
 
 	(void)_dummy;
 	auto it = m_main.find(_h);
-	if (it != m_main.end())
+	if (it != m_main.end() && it->second.second > 0)
 	{
 		it->second.first = _v.toString();
 		it->second.second++;
@@ -110,11 +110,11 @@ bool MemoryDB::kill(h256 const& _h)
 #endif
 	if (m_main.count(_h))
 	{
-		if (m_main[_h].second > 0)
-		{
+		//if (m_main[_h].second > 0)
+		//{
 			m_main[_h].second--;
 			return true;
-		}
+		//}
 #if ETH_PARANOIA
 		else
 		{
@@ -128,6 +128,11 @@ bool MemoryDB::kill(h256 const& _h)
 	{
 		dbdebug << "NOKILL" << _h;
 #endif
+	}
+	else
+	{
+		m_main[_h] = make_pair(string(), -1);
+		return true;
 	}
 	return false;
 }

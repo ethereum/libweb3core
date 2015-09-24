@@ -41,7 +41,7 @@ public:
 
 	ldb::DB* db() const { return m_db.get(); }
 
-	void commit(u256 _blockNumber);
+	void commit(u256 _blockNumber, h256 _root);
 	void rollback();
 	void insert(h256 const& _h, bytesConstRef _v, bool _istorage = false);
 
@@ -63,15 +63,18 @@ private:
 	u256 isInDeathRow(h256 const& _h) const;
 	int getRefCount(h256 const& _h) const;
 	int increaseRefCount(h256 const& _h, ldb::WriteBatch& _batch, int _addedRefCount = 1) const;
-	int decreaseRefCount(h256 const& _h,ldb::WriteBatch& _batch) const;
+	int decreaseRefCount(h256 const& _h,ldb::WriteBatch& _batch,  int _decRefCount = 1) const;
+
 	void setRefCount(h256 const& _h, ldb::WriteBatch& _batch, int _refCount = 1) const;
 
 	void safeWrite(ldb::WriteBatch& _batch) const;
 
 	static std::map<u256, std::set<h256> > m_deathrow;
-	static std::map<h256, unsigned > m_TheRefCount;
+	static std::map<h256, int > m_TheRefCount;
 	static std::map<h256, unsigned > m_TheType;
+	static std::set<h256> m_Roots;
 	static std::map<u256, std::unordered_map<h256, uint > > m_changes;
+public:
 	static u256 m_blockNumber; //updated in commit()
 #endif
 
