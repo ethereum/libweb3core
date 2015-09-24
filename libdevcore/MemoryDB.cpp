@@ -82,11 +82,14 @@ bool MemoryDB::exists(h256 const& _h) const
 	return false;
 }
 
-void MemoryDB::insert(h256 const& _h, bytesConstRef _v)
+void MemoryDB::insert(h256 const& _h, bytesConstRef _v, bool _dummy)
 {
+
 #if DEV_GUARDED_DB
 	WriteGuard l(x_this);
 #endif
+
+	(void)_dummy;
 	auto it = m_main.find(_h);
 	if (it != m_main.end())
 	{

@@ -67,7 +67,7 @@ public:
 	using DB = _DB;
 
 	explicit GenericTrieDB(DB* _db = nullptr): m_db(_db) {}
-	GenericTrieDB(DB* _db, h256 const& _root, Verification _v = Verification::Normal) { open(_db, _root, _v); }
+	GenericTrieDB(DB* _db, h256 const& _root, Verification _v = Verification::Normal) { open(_db, _root, _v); m_storage = false; }
 	~GenericTrieDB() {}
 
 	void open(DB* _db) { m_db = _db; }
@@ -90,6 +90,8 @@ public:
 			if (!node(m_root).size())
 				BOOST_THROW_EXCEPTION(RootNotFound());
 	}
+
+	void setStorage(bool _isStorage) {m_storage = _isStorage;}
 
 	/// True if the trie is uninitialised (i.e. that the DB doesn't contain the root node).
 	bool isNull() const { return !node(m_root).size(); }
@@ -291,7 +293,7 @@ private:
 
 	// These are low-level node insertion functions that just go straight through into the DB.
 	h256 forceInsertNode(bytesConstRef _v) { auto h = sha3(_v); forceInsertNode(h, _v); return h; }
-	void forceInsertNode(h256 const& _h, bytesConstRef _v) { m_db->insert(_h, _v); }
+	void forceInsertNode(h256 const& _h, bytesConstRef _v) { m_db->insert(_h, _v, m_storage); }
 	void forceKillNode(h256 const& _h) { m_db->kill(_h); }
 
 	// This are semantically-aware node insertion functions that only kills when the node's
@@ -301,6 +303,7 @@ private:
 	void killNode(RLP const& _d) { if (_d.data().size() >= 32) forceKillNode(sha3(_d.data())); }
 	void killNode(RLP const& _d, h256 const& _h) { if (_d.data().size() >= 32) forceKillNode(_h); }
 
+	bool m_storage;
 	h256 m_root;
 	DB* m_db = nullptr;
 };
@@ -440,6 +443,7 @@ public:
 	using Super::setRoot;
 	using Super::db;
 	using Super::debugStructure;
+	using Super::setStorage;
 
 	std::string at(bytesConstRef _key) const { return Super::at(sha3(_key)); }
 	bool contains(bytesConstRef _key) { return Super::contains(sha3(_key)); }
