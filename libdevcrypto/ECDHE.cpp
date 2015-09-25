@@ -21,6 +21,8 @@
 
 #include "ECDHE.h"
 #include <libdevcore/SHA3.h>
+
+#include "uECC.h"
 #include "CryptoPP.h"
 
 using namespace std;
@@ -31,7 +33,7 @@ static Secp256k1PP s_secp256k1;
 
 void dev::crypto::ecdh::agree(Secret const& _s, Public const& _r, Secret& o_s)
 {
-	s_secp256k1.agree(_s, _r, o_s);
+	uECC_shared_secret(_r.data(),  _s.data(), o_s.writable().data());
 }
 
 void ECDHE::agree(Public const& _remote, Secret& o_sharedSecret) const
@@ -41,6 +43,6 @@ void ECDHE::agree(Public const& _remote, Secret& o_sharedSecret) const
 		BOOST_THROW_EXCEPTION(InvalidState());
 	
 	m_remoteEphemeral = _remote;
-	s_secp256k1.agree(m_ephemeral.sec(), m_remoteEphemeral, o_sharedSecret);
+	uECC_shared_secret(m_remoteEphemeral.data(),  m_ephemeral.sec().data(), o_sharedSecret.writable().data());
 }
 

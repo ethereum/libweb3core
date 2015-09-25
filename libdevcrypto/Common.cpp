@@ -275,8 +275,8 @@ bytesSec dev::scrypt(std::string const& _pass, bytes const& _salt, uint64_t _n, 
 void KeyPair::populateFromSecret(Secret const& _sec)
 {
 	m_secret = _sec;
-	if (s_secp256k1pp.verifySecret(m_secret, m_public))
-		m_address = toAddress(m_public);
+	m_public = toPublic(_sec);
+	m_address = toAddress(m_public);
 }
 
 KeyPair KeyPair::create()
