@@ -28,8 +28,6 @@ using namespace dev;
 namespace dev
 {
 
-//h256 const EmptyTrie = sha3(rlp(""));
-
 const char* DBChannel::name() { return "TDB"; }
 const char* DBWarn::name() { return "TDB"; }
 
