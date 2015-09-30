@@ -27,6 +27,8 @@ using namespace dev;
 namespace dev
 {
 
+h256 const EmptyTrie = sha3(rlp(""));
+
 const char* DBChannel::name() { return "TDB"; }
 const char* DBWarn::name() { return "TDB"; }
 
@@ -108,6 +110,9 @@ bool MemoryDB::kill(h256 const& _h)
 #if DEV_GUARDED_DB
 	ReadGuard l(x_this);
 #endif
+	if (_h == EmptyTrie)
+		return true;
+
 	if (m_main.count(_h))
 	{
 		//if (m_main[_h].second > 0)
