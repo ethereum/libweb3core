@@ -92,7 +92,7 @@ void OverlayDB::commit(u256 _blockNumber)
 					if (blockNumber != 0)
 						m_deathrow[blockNumber].erase(_h);
 				}
-				else if(i.second.second < 0)
+				else if (i.second.second < 0)
 				{
 					int newRefCount = increaseRefCount(_h, batch, i.second.second);
 					if (newRefCount <= 0)
@@ -195,7 +195,6 @@ std::string OverlayDB::lookup(h256 const& _h) const
 
 	if (ret.empty())
 		return ret;
-
 
 	ldb::WriteBatch batch;
 

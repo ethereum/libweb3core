@@ -83,16 +83,13 @@ bool MemoryDB::exists(h256 const& _h) const
 	return false;
 }
 
-void MemoryDB::insert(h256 const& _h, bytesConstRef _v, bool _dummy)
+void MemoryDB::insert(h256 const& _h, bytesConstRef _v)
 {
-
 #if DEV_GUARDED_DB
 	WriteGuard l(x_this);
 #endif
-
-	(void)_dummy;
 	auto it = m_main.find(_h);
-	if (it != m_main.end() && it->second.second > 0)
+	if (it != m_main.end())
 	{
 		it->second.first = _v.toString();
 		it->second.second++;
@@ -104,41 +101,18 @@ void MemoryDB::insert(h256 const& _h, bytesConstRef _v, bool _dummy)
 #endif
 }
 
-bool MemoryDB::kill(h256 const& _h)
+void MemoryDB::kill(h256 const& _h)
 {
 #if DEV_GUARDED_DB
 	ReadGuard l(x_this);
 #endif
 	if (_h == EmptyTrie)
-		return true;
+		return;
 
 	if (m_main.count(_h))
-	{
-		//if (m_main[_h].second > 0)
-		//{
-			m_main[_h].second--;
-			return true;
-		//}
-#if ETH_PARANOIA
-		else
-		{
-			// If we get to this point, then there was probably a node in the level DB which we need to remove and which we have previously
-			// used as part of the memory-based MemoryDB. Nothing to be worried about *as long as the node exists in the DB*.
-			dbdebug << "NOKILL-WAS" << _h;
-		}
-		dbdebug << "KILL" << _h << "=>" << m_main[_h].second;
-	}
+		m_main[_h].second--;
 	else
-	{
-		dbdebug << "NOKILL" << _h;
-#endif
-	}
-	else
-	{
 		m_main[_h] = make_pair(string(), -1);
-		return true;
-	}
-	return false;
 }
 
 bytes MemoryDB::lookupAux(h256 const& _h) const

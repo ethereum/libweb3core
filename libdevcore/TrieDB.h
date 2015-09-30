@@ -68,7 +68,7 @@ public:
 	using DB = _DB;
 
 	explicit GenericTrieDB(DB* _db = nullptr): m_db(_db) {}
-	GenericTrieDB(DB* _db, h256 const& _root, Verification _v = Verification::Normal) { open(_db, _root, _v);}
+	GenericTrieDB(DB* _db, h256 const& _root, Verification _v = Verification::Normal) { open(_db, _root, _v); }
 	~GenericTrieDB() {}
 
 	void open(DB* _db) { m_db = _db; }
@@ -97,7 +97,7 @@ public:
 	/// True if the trie is initialised but empty (i.e. that the DB contains the root node which is empty).
 	bool isEmpty() const { return m_root == c_shaNull && node(m_root).size(); }
 
-	h256 const& root() const {if (node(m_root).empty()) {BOOST_THROW_EXCEPTION(BadRoot() << errinfo_hash256(m_root) );} return m_root; }	// patch the root in the case of the empty trie. TODO: handle this properly.
+	h256 const& root() const { if (node(m_root).empty()) {BOOST_THROW_EXCEPTION(BadRoot() << errinfo_hash256(m_root) );} return m_root; }	// patch the root in the case of the empty trie. TODO: handle this properly.
 
 	std::string at(bytes const& _key) const { return at(&_key); }
 	std::string at(bytesConstRef _key) const;
@@ -907,9 +907,8 @@ template <class DB> void GenericTrieDB<DB>::mergeAtAux(RLPStream& _out, RLP cons
 	{
 		s = node(_orig.toHash<h256>());
 		r = RLP(s);
-		assert(!r.isNull());
-		//if (r.isNull())
-		//	BOOST_THROW_EXCEPTION(NodeNotFound() << errinfo_hash256(_orig.toHash<h256>()) << errinfo_atBlock(OverlayDB::m_blockNumber));
+		if (r.isNull())
+			BOOST_THROW_EXCEPTION(NodeNotFound() << errinfo_hash256(_orig.toHash<h256>()));
 		isRemovable = true;
 	}
 	bytes b = mergeAt(r, _k, _v, !isRemovable);

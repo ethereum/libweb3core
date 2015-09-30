@@ -53,8 +53,8 @@ public:
 
 	std::string lookup(h256 const& _h) const;
 	bool exists(h256 const& _h) const;
-	void insert(h256 const& _h, bytesConstRef _v, bool _dummy = true);
-	bool kill(h256 const& _h);
+	void insert(h256 const& _h, bytesConstRef _v);
+	void kill(h256 const& _h);
 	void purge();
 
 	bytes lookupAux(h256 const& _h) const;
