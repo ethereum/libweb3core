@@ -62,13 +62,8 @@ std::string MemoryDB::lookup(h256 const& _h) const
 	ReadGuard l(x_this);
 #endif
 	auto it = m_main.find(_h);
-	if (it != m_main.end())
-	{
-		if (!m_enforceRefs || it->second.second > 0)
+	if (it != m_main.end() && (!m_enforceRefs || it->second.second > 0))
 			return it->second.first;
-		else
-			cwarn << "Lookup required for value with refcount == 0. This is probably a critical trie issue" << _h;
-	}
 	return std::string();
 }
 

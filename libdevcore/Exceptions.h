@@ -52,7 +52,7 @@ struct RLPException: virtual Exception { RLPException(std::string _message = std
 struct DBException: virtual Exception { DBException(std::string _message = std::string()): Exception(_message) {} };
 
 #define DEV_SIMPLE_EXCEPTION_RLP(X) struct X: virtual RLPException { const char* what() const noexcept override { return #X; } }
-#define DEV_SIMPLE_EXCEPTION_DB(X) struct X: virtual RLPException { const char* what() const noexcept override { return #X; } }
+#define DEV_SIMPLE_EXCEPTION_DB(X) struct X: virtual DBException { const char* what() const noexcept override { return #X; } }
 
 
 DEV_SIMPLE_EXCEPTION_RLP(BadCast);

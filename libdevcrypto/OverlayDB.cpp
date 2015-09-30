@@ -32,9 +32,11 @@ namespace dev
 
 h256 const EmptyTrie = sha3(rlp(""));
 
+#ifdef PRUNING
 u256 OverlayDB::m_blockNumber = 0;
 std::map<u256, std::set<h256> > OverlayDB::m_deathrow = {};
 std::map<u256, std::unordered_map<h256, int > > OverlayDB::m_changes = {};
+#endif
 
 class WriteBatchNoter: public ldb::WriteBatch::Handler
 {
@@ -53,11 +55,12 @@ void OverlayDB::commit(u256 _blockNumber)
 #ifdef PRUNING
 	m_blockNumber = _blockNumber;
 #else
-	void(_blockNumber);
+	(void)_blockNumber;
 #endif
 
 	if (m_db)
 	{
+#ifdef PRUNING
 		ldb::WriteBatch batchR;
 		// check if we need to revert changes in refCount (chain reorg)
 		u256 tmpBlockNumber = _blockNumber;
@@ -73,6 +76,7 @@ void OverlayDB::commit(u256 _blockNumber)
 			safeWrite(batchR);
 			tmpBlockNumber++;
 		}
+#endif
 
 		ldb::WriteBatch batch;
 
@@ -86,6 +90,7 @@ void OverlayDB::commit(u256 _blockNumber)
 				if (i.second.second > 0)
 				{
 					batch.Put(ldb::Slice((char const*)i.first.data(), i.first.size), ldb::Slice(i.second.first.data(), i.second.first.size()));
+#ifdef PRUNING
 					increaseRefCount(i.first, batch, i.second.second);
 
 					u256 blockNumber = isInDeathRow(_h);
@@ -104,6 +109,7 @@ void OverlayDB::commit(u256 _blockNumber)
 						cwarn << "previous refcount: " << getRefCount(i.first) << " now add: " << i.second.second;
 						cwarn << "so the new refcount is: " << newRefCount;
 					}
+#endif
 				}
 			}
 			for (auto const& i: m_aux)
@@ -121,6 +127,7 @@ void OverlayDB::commit(u256 _blockNumber)
 		DEV_WRITE_GUARDED(x_this)
 #endif
 		{
+#ifdef PRUNING
 			if (m_blockNumber > PRUNING)
 			{
 				for (auto& _h : m_deathrow[m_blockNumber - PRUNING])
@@ -138,6 +145,7 @@ void OverlayDB::commit(u256 _blockNumber)
 				m_deathrow.erase(m_blockNumber - PRUNING);
 				m_changes.erase(m_blockNumber - PRUNING);
 			}
+#endif
 			safeWrite(batch);
 		}
 		{
@@ -192,7 +200,7 @@ std::string OverlayDB::lookup(h256 const& _h) const
 		else
 			return ret;
 	}
-
+#ifdef PRUNING
 	if (ret.empty())
 		return ret;
 
@@ -213,9 +221,11 @@ std::string OverlayDB::lookup(h256 const& _h) const
 				m_deathrow[blockNumber].erase(_h);
 		}
 	}
+#endif
 	return ret;
 }
 
+#ifdef PRUNING
 u256 OverlayDB::isInDeathRow(h256 const& _h) const
 {
 	for (auto const& i : OverlayDB::m_deathrow)
@@ -225,6 +235,7 @@ u256 OverlayDB::isInDeathRow(h256 const& _h) const
 	}
 	return 0;
 }
+#endif
 
 bool OverlayDB::exists(h256 const& _h) const
 {
@@ -244,6 +255,7 @@ bool OverlayDB::exists(h256 const& _h) const
 	if (ret.empty())
 		return false;
 
+#ifdef PRUNING
 	ldb::WriteBatch batch;
 
 	if (!getRefCount(_h) && _h != EmptyTrie)
@@ -261,7 +273,7 @@ bool OverlayDB::exists(h256 const& _h) const
 				m_deathrow[blockNumber].erase(_h);
 		}
 	}
-
+#endif
 	return !ret.empty();
 }
 
@@ -288,11 +300,12 @@ void OverlayDB::safeWrite(ldb::WriteBatch& _batch) const
 			ldb::Status o;
 			if (m_db)
 				o = m_db->Write(m_writeOptions, &_batch);
-			else if (m_blockNumber > PRUNING)
+			else
 				cwarn << "m_db not accessible in safewrite!!";
-
+#ifdef PRUNING
 			if (m_blockNumber == 0)
 				break;
+#endif
 
 			if (m_db && o.ok())
 				break;
@@ -310,6 +323,7 @@ void OverlayDB::safeWrite(ldb::WriteBatch& _batch) const
 	}
 }
 
+#ifdef PRUNING
 int OverlayDB::getRefCount(h256 const& _h) const
 {
 	string refCount;
@@ -349,6 +363,7 @@ int OverlayDB::increaseRefCount(h256 const& _h,ldb::WriteBatch& _batch, int _add
 	}
 	return refCountNumber;
 }
+#endif // PRUNING
 }
 
 #endif // ETH_EMSCRIPTEN

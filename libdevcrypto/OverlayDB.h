@@ -28,7 +28,7 @@
 #include <libdevcore/MemoryDB.h>
 //#include <libdevcore/Guards.h>
 
-#define PRUNING 200
+//#define PRUNING 0
 
 namespace dev
 {
@@ -52,6 +52,7 @@ public:
 	bytes lookupAux(h256 const& _h) const;
 
 private:
+	void safeWrite(ldb::WriteBatch& _batch) const;
 	using MemoryDB::clear;
 
 	std::shared_ptr<ldb::DB> m_db;
@@ -63,7 +64,6 @@ private:
 	u256 isInDeathRow(h256 const& _h) const;
 	int getRefCount(h256 const& _h) const;
 	int increaseRefCount(h256 const& _h, ldb::WriteBatch& _batch, int _addedRefCount = 1, bool _revert = false) const;
-	void safeWrite(ldb::WriteBatch& _batch) const;
 
 	static std::map<u256, std::set<h256> > m_deathrow;
 	static std::map<u256, std::unordered_map<h256, int > > m_changes;
