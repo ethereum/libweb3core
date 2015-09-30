@@ -51,7 +51,7 @@ OverlayDB::~OverlayDB()
 void OverlayDB::commit(u256 _blockNumber)
 {
 #ifdef PRUNING
-	OverlayDB::m_blockNumber = _blockNumber;
+	m_blockNumber = _blockNumber;
 #else
 	void(_blockNumber);
 #endif
@@ -59,25 +59,21 @@ void OverlayDB::commit(u256 _blockNumber)
 	if (m_db)
 	{
 		ldb::WriteBatch batchR;
-
-		cout << "blocknumber: " << m_blockNumber << endl;
-
 		// check if we need to revert changes in refCount (chain reorg)
-		u256 tmp_blockNumber = _blockNumber;
-		while (_blockNumber && m_changes.find(tmp_blockNumber) != m_changes.end())
+		u256 tmpBlockNumber = _blockNumber;
+		while (_blockNumber && m_changes.find(tmpBlockNumber) != m_changes.end())
 		{
-			cout << "CHAIN REORG AT BLOCK: " << _blockNumber << endl;
-			cout << "reverting changes of block " << tmp_blockNumber << endl;
+			cnote << "CHAIN REORG AT BLOCK: " << _blockNumber;
+			cnote << "reverting changes of block " << tmpBlockNumber;
 			for (auto& i : m_changes[_blockNumber])
-			{
 				increaseRefCount(i.first, batchR, -i.second, true);
-			}
-			m_deathrow[tmp_blockNumber].clear();
-			m_changes[tmp_blockNumber].clear();
-			tmp_blockNumber++;
+
+			m_deathrow[tmpBlockNumber].clear();
+			m_changes[tmpBlockNumber].clear();
+			safeWrite(batchR);
+			tmpBlockNumber++;
 		}
 
-		safeWrite(batchR);
 		ldb::WriteBatch batch;
 
 #if DEV_GUARDED_DB
@@ -100,21 +96,14 @@ void OverlayDB::commit(u256 _blockNumber)
 				{
 					int newRefCount = increaseRefCount(_h, batch, i.second.second);
 					if (newRefCount <= 0)
-						m_deathrow[OverlayDB::m_blockNumber].insert(_h);
+						m_deathrow[m_blockNumber].insert(_h);
 					if (newRefCount < 0)
 					{
 						cwarn << "REFCOUNT SMALLER THAN ZERO, that means we re-kill a node which is not used by anyone!? Who is asking for that node? Probably a critical trie issue";
 						cwarn << "hash: " << i.first ;
 						cwarn << "previous refcount: " << getRefCount(i.first) << " now add: " << i.second.second;
 						cwarn << "so the new refcount is: " << newRefCount;
-						//cin.get();
 					}
-
-				}
-				else if (_blockNumber == 0)
-				{
-					batch.Put(ldb::Slice((char const*)i.first.data(), i.first.size), ldb::Slice(i.second.first.data(), i.second.first.size()));
-					increaseRefCount(i.first, batch, i.second.second);
 				}
 			}
 			for (auto const& i: m_aux)
@@ -132,22 +121,22 @@ void OverlayDB::commit(u256 _blockNumber)
 		DEV_WRITE_GUARDED(x_this)
 #endif
 		{
-			if (OverlayDB::m_blockNumber > PRUNING)
+			if (m_blockNumber > PRUNING)
 			{
-				for (auto& _h : m_deathrow[OverlayDB::m_blockNumber - PRUNING])
+				for (auto& _h : m_deathrow[m_blockNumber - PRUNING])
 				{
-					batch.Delete(ldb::Slice((char const*)_h.data(), 32)); //delete refcount too
+					batch.Delete(ldb::Slice((char const*)_h.data(), 32));
 
-					bytes b = _h.asBytes();
-					b.push_back(255);	// for aux
-					batch.Delete(bytesConstRef(&b));
+					bytes bAux = _h.asBytes();
+					bAux.push_back(255);	// for aux
+					batch.Delete(bytesConstRef(&bAux));
 
 					bytes bRefCount = _h.asBytes();
 					bRefCount.push_back(254);	// for refcount
 					batch.Delete(bytesConstRef(&bRefCount));
 				}
-				m_deathrow.erase(OverlayDB::m_blockNumber - PRUNING);
-				m_changes.erase(OverlayDB::m_blockNumber - PRUNING);
+				m_deathrow.erase(m_blockNumber - PRUNING);
+				m_changes.erase(m_blockNumber - PRUNING);
 			}
 			safeWrite(batch);
 		}
@@ -181,8 +170,6 @@ bytes OverlayDB::lookupAux(h256 const& _h) const
 
 void OverlayDB::rollback()
 {
-	cout << "ROLLBACK in OVERLAYDB called\n";
-	cout << "at blocknumber: " << m_blockNumber << endl;
 #if DEV_GUARDED_DB
 	DEV_WRITE_GUARDED(x_this)
 #endif
@@ -212,11 +199,8 @@ std::string OverlayDB::lookup(h256 const& _h) const
 
 	ldb::WriteBatch batch;
 
-	if (!getRefCount(_h) && _h != EmptyTrie)
+	if (!getRefCount(_h) && _h != EmptyTrie) // lookup for existing node wih refcount 0, happens when reverting blocks
 	{
-		cwarn << "lookup request for: " << _h << " with refcount 0\n This is probably a critical trie issue or";
-		cwarn << "might be just reverting some blocks";
-
 #if DEV_GUARDED_DB
 		DEV_WRITE_GUARDED(x_this)
 #endif
@@ -245,7 +229,6 @@ u256 OverlayDB::isInDeathRow(h256 const& _h) const
 
 bool OverlayDB::exists(h256 const& _h) const
 {
-
 	if (MemoryDB::exists(_h))
 		return true;
 
@@ -266,13 +249,12 @@ bool OverlayDB::exists(h256 const& _h) const
 
 	if (!getRefCount(_h) && _h != EmptyTrie)
 	{
-		cwarn << "exists request for: " << _h << " with refcount 0";
 #if DEV_GUARDED_DB
 		DEV_WRITE_GUARDED(x_this);
 #endif
 		{
-			//setRefCount(_h, batch);
-			//safeWrite(batch);
+			increaseRefCount(_h, batch);
+			safeWrite(batch);
 
 			// pruning
 			u256 blockNumber = isInDeathRow(_h);
@@ -292,43 +274,7 @@ void OverlayDB::insert(h256 const& _h, bytesConstRef _v)
 
 void OverlayDB::kill(h256 const& _h)
 {
-	if (!MemoryDB::kill(_h) && _h != EmptyTrie)
-	{
-		cwarn << "should never arrive here!";
-//		std::string ret;
-//#if DEV_GUARDED_DB
-//		DEV_READ_GUARDED(x_this)
-//#endif
-//		{
-//			if (m_db)
-//				m_db->Get(m_readOptions, ldb::Slice((char const*)_h.data(), 32), &ret);
-//			else
-//				cwarn << "m_db not accessible in kill!!";
-//		}
-
-
-//		// No point node ref decreasing for EmptyTrie since we never bother incrementing it in the first place for
-//		// empty storage tries.
-//		if (ret.empty() && _h != EmptyTrie)
-//			cnote << "Decreasing DB node ref count below zero with no DB node. Probably have a corrupt Trie." << _h;
-//		else
-//		{
-//#if DEV_GUARDED_DB
-//			DEV_WRITE_GUARDED(x_this);
-//#endif
-//			{
-//				// decrease refcount
-//				ldb::WriteBatch batch;
-
-//				if (!decreaseRefCount(_h, batch) && !isInDeathRow(_h))
-//				{
-//					//cout << "added " << _h << " to deathrow in block: " << OverlayDB::m_blockNumber << endl;
-//					m_deathrow[OverlayDB::m_blockNumber].insert(_h);
-//				}
-//				safeWrite(batch);
-//			}
-//		}
-	}
+	MemoryDB::kill(_h);
 }
 
 void OverlayDB::safeWrite(ldb::WriteBatch& _batch) const
@@ -344,13 +290,12 @@ void OverlayDB::safeWrite(ldb::WriteBatch& _batch) const
 			if (m_db)
 				o = m_db->Write(m_writeOptions, &_batch);
 			else if (m_blockNumber > PRUNING)
-			{
 				cwarn << "m_db not accessible in safewrite!!";
-			}
+
+			if (m_blockNumber == 0)
+				break;
 
 			if (m_db && o.ok())
-				break;
-			if (i == 3)
 				break;
 			if (i == 9)
 			{
@@ -394,11 +339,7 @@ int OverlayDB::increaseRefCount(h256 const& _h,ldb::WriteBatch& _batch, int _add
 	bytes b = _h.asBytes();
 	b.push_back(254); // for refcount
 
-	cout << "increaseRefcount for: " << _h << " by " << _addedRefCount << " with revert: " << _revert << endl;
-	cout << "before: " << getRefCount(_h);
-
 	int refCountNumber = getRefCount(_h) + _addedRefCount;
-	cout << " after: " << refCountNumber << endl;
 #if DEV_GUARDED_DB
 	DEV_WRITE_GUARDED(x_this);
 #endif

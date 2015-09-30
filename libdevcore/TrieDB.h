@@ -97,7 +97,7 @@ public:
 	/// True if the trie is initialised but empty (i.e. that the DB contains the root node which is empty).
 	bool isEmpty() const { return m_root == c_shaNull && node(m_root).size(); }
 
-	h256 const& root() const {assert(!node(m_root).empty()); if (node(m_root).empty()) {BOOST_THROW_EXCEPTION(BadRoot() << errinfo_hash256(m_root) << errinfo_atBlock(OverlayDB::m_blockNumber));} return m_root; }	// patch the root in the case of the empty trie. TODO: handle this properly.
+	h256 const& root() const {if (node(m_root).empty()) {BOOST_THROW_EXCEPTION(BadRoot() << errinfo_hash256(m_root) );} return m_root; }	// patch the root in the case of the empty trie. TODO: handle this properly.
 
 	std::string at(bytes const& _key) const { return at(&_key); }
 	std::string at(bytesConstRef _key) const;
