@@ -74,7 +74,7 @@ Public dev::toPublic(Secret const& _secret)
 		return Public();
 	size_t outlen = 0;
 	byte out[65];
-	if (!secp256k1_ec_pubkey_serialize(s_secp256k1.get(), out, &outlen, &pub, 0))
+	if (!secp256k1_ec_pubkey_serialize(s_secp256k1.get(), out, &outlen, &pub, 0) || outlen != 65)
 		return Public();
 	return Public(out + 1, Public::ConstructFromPointer);
 #else
@@ -209,7 +209,7 @@ Public dev::recover(Signature const& _sig, h256 const& _message)
 		return Public();
 	byte out[65];
 	size_t outlen = 0;
-	if (!secp256k1_ec_pubkey_serialize(s_secp256k1.get(), out, &outlen, &pub, 0))
+	if (!secp256k1_ec_pubkey_serialize(s_secp256k1.get(), out, &outlen, &pub, 0) || outlen != 65)
 		return Public();
 	ret = Public(out + 1, Public::ConstructFromPointer);
 #else
