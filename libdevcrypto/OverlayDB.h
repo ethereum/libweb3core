@@ -28,7 +28,7 @@
 #include <libdevcore/MemoryDB.h>
 //#include <libdevcore/Guards.h>
 
-#define PRUNING 100
+#define PRUNING 10000
 
 namespace dev
 {

@@ -212,6 +212,8 @@ std::string OverlayDB::lookup(h256 const& _h) const
 		DEV_WRITE_GUARDED(x_this)
 #endif
 		{
+			cwarn << "Lookup required for value with refcount " << getRefCount(_h) << " in OverlayDB " << _h;
+
 			increaseRefCount(_h, batch);
 			safeWrite(batch);
 

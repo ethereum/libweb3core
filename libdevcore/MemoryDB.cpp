@@ -61,9 +61,22 @@ std::string MemoryDB::lookup(h256 const& _h) const
 #if DEV_GUARDED_DB
 	ReadGuard l(x_this);
 #endif
+
 	auto it = m_main.find(_h);
-	if (it != m_main.end() && (!m_enforceRefs || it->second.second > 0))
-			return it->second.first;
+	if (it != m_main.end())
+	{
+		if (m_enforceRefs && it->second.second <= 0)
+		{
+			cwarn << "Lookup required for value with refcount "<< it->second.second << " in MemoryDB " << _h;
+			it->second.second++;
+		}
+
+		return it->second.first;
+	}
+
+//	auto it = m_main.find(_h);
+//	if (it != m_main.end() && (!m_enforceRefs || it->second.second > 0))
+//			return it->second.first;
 	return std::string();
 }
 
