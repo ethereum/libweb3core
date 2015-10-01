@@ -31,6 +31,7 @@
 #include <libdevcore/RLP.h>
 #if ETH_HAVE_SECP256K1
 #include <secp256k1/include/secp256k1.h>
+#include <secp256k1/include/secp256k1_recovery.h>
 #endif
 #include "AES.h"
 #include "CryptoPP.h"
@@ -40,23 +41,18 @@ using namespace dev;
 using namespace dev::crypto;
 
 #ifdef ETH_HAVE_SECP256K1
-struct Secp256k1Context
-{
-	Secp256k1Context() { ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY); }
-	~Secp256k1Context() { secp256k1_context_destroy(ctx); }
-	secp256k1_context_t* ctx;
-	operator secp256k1_context_t const*() const { return ctx; }
-};
-static Secp256k1Context s_secp256k1;
+std::unique_ptr<secp256k1_context, void(*)(secp256k1_context*)> s_secp256k1(secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY), [](secp256k1_context* _c){ secp256k1_context_destroy(_c); });
 #endif
 
 static Secp256k1PP s_secp256k1pp;
 
+static h256 const c_curveN("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
+
 bool dev::SignatureStruct::isValid() const noexcept
 {
 	if (v > 1 ||
-		r >= h256("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141") ||
-		s >= h256("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141") ||
+		r >= c_curveN ||
+		s >= c_curveN ||
 		s < h256(1) ||
 		r < h256(1))
 		return false;
@@ -73,11 +69,14 @@ Address dev::ZeroAddress = Address();
 Public dev::toPublic(Secret const& _secret)
 {
 #ifdef ETH_HAVE_SECP256K1
-	bytes o(65);
-	int pubkeylen;
-	if (!secp256k1_ec_pubkey_create(s_secp256k1, o.data(), &pubkeylen, _secret.data(), false))
+	secp256k1_pubkey pub;
+	if (!secp256k1_ec_pubkey_create(s_secp256k1.get(), &pub, _secret.data()))
 		return Public();
-	return FixedHash<64>(o.data()+1, Public::ConstructFromPointer);
+	size_t outlen = 0;
+	byte out[65];
+	if (!secp256k1_ec_pubkey_serialize(s_secp256k1.get(), out, &outlen, &pub, 0) || outlen != 65)
+		return Public();
+	return Public(out + 1, Public::ConstructFromPointer);
 #else
 	Public p;
 	s_secp256k1pp.toPublic(_secret, p);
@@ -199,11 +198,20 @@ Public dev::recover(Signature const& _sig, h256 const& _message)
 {
 	Public ret;
 #ifdef ETH_HAVE_SECP256K1
-	bytes o(65);
-	int pubkeylen;
-	if (!secp256k1_ecdsa_recover_compact(s_secp256k1, _message.data(), _sig.data(), o.data(), &pubkeylen, false, _sig[64]))
+	static_assert(sizeof(Signature) == 65, "sizeof(_sig) == 65");
+	static_assert(sizeof(secp256k1_ecdsa_recoverable_signature) == 65, "sizeof(secp256k1_ecdsa_recoverable_signature) == 65");
+	secp256k1_ecdsa_recoverable_signature sig;
+	if (!secp256k1_ecdsa_recoverable_signature_parse_compact(s_secp256k1.get(), &sig, _sig.data(), _sig.data()[64]))
 		return Public();
-	ret = FixedHash<64>(o.data() + 1, Public::ConstructFromPointer);
+
+	secp256k1_pubkey pub;
+	if (!secp256k1_ecdsa_recover(s_secp256k1.get(), &pub, &sig, _message.data()))
+		return Public();
+	byte out[65];
+	size_t outlen = 0;
+	if (!secp256k1_ec_pubkey_serialize(s_secp256k1.get(), out, &outlen, &pub, 0) || outlen != 65)
+		return Public();
+	ret = Public(out + 1, Public::ConstructFromPointer);
 #else
 	ret = s_secp256k1pp.recover(_sig, _message.ref());
 #endif
@@ -215,9 +223,14 @@ Public dev::recover(Signature const& _sig, h256 const& _message)
 Signature dev::sign(Secret const& _k, h256 const& _hash)
 {
 #ifdef ETH_HAVE_SECP256K1
-	Signature s;
+	static_assert(sizeof(Signature) == 65, "sizeof(s) == 65");
+	static_assert(sizeof(secp256k1_ecdsa_recoverable_signature) == 65, "sizeof(secp256k1_ecdsa_recoverable_signature) == 65");
+	secp256k1_ecdsa_recoverable_signature sig;
+	if (!secp256k1_ecdsa_sign_recoverable(s_secp256k1.get(), &sig, _hash.data(), _k.data(), nullptr, nullptr))
+		return Signature();
 	int v;
-	if (!secp256k1_ecdsa_sign_compact(s_secp256k1, _hash.data(), s.data(), _k.data(), NULL, NULL, &v))
+	Signature s;
+	if (!secp256k1_ecdsa_recoverable_signature_serialize_compact(s_secp256k1.get(), s.data(), &v, &sig))
 		return Signature();
 	s[64] = v;
 	return s;
@@ -231,7 +244,18 @@ bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
 	if (!_p)
 		return false;
 #ifdef ETH_HAVE_SECP256K1
-	return _p == recover(_s, _hash);
+	secp256k1_ecdsa_recoverable_signature sigr;
+	if (!secp256k1_ecdsa_recoverable_signature_parse_compact(s_secp256k1.get(), &sigr, _s.data(), _s.data()[64]))
+		return false;
+	secp256k1_ecdsa_signature sig;
+	if (!secp256k1_ecdsa_recoverable_signature_convert(s_secp256k1.get(), &sig, &sigr))
+		return false;
+	secp256k1_pubkey pub;
+	byte p[65] = { 4 };
+	std::memcpy(p + 1, _p.data(), 64);
+	if (!secp256k1_ec_pubkey_parse(s_secp256k1.get(), &pub, p, 65))
+		return false;
+	return secp256k1_ecdsa_verify(s_secp256k1.get(), &sig, _hash.data(), &pub) == 1;
 #else
 	return s_secp256k1pp.verify(_p, _s, _hash.ref(), true);
 #endif
@@ -275,8 +299,23 @@ bytesSec dev::scrypt(std::string const& _pass, bytes const& _salt, uint64_t _n, 
 void KeyPair::populateFromSecret(Secret const& _sec)
 {
 	m_secret = _sec;
-	if (s_secp256k1pp.verifySecret(m_secret, m_public))
-		m_address = toAddress(m_public);
+#ifdef ETH_HAVE_SECP256K1
+	if (!secp256k1_ec_seckey_verify(s_secp256k1.get(), _sec.data()))
+	{
+		m_public.clear();
+		m_address.clear();
+		return;
+	}
+	m_public = toPublic(_sec);
+#else
+	if (!s_secp256k1pp.verifySecret(m_secret, m_public))
+	{
+		m_public.clear();
+		m_address.clear();
+		return;
+	}
+#endif
+	m_address = toAddress(m_public);
 }
 
 KeyPair KeyPair::create()
