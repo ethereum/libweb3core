@@ -764,7 +764,8 @@ template <class DB> void GenericTrieDB<DB>::insert(bytesConstRef _key, bytesCons
 #endif
 
 	std::string rootValue = node(m_root);
-	assert(rootValue.size());
+	if (!rootValue.size())
+		BOOST_THROW_EXCEPTION(NodeNotFound() << errinfo_hash256(m_root));
 	bytes b = mergeAt(RLP(rootValue), m_root, NibbleSlice(_key), _value);
 
 	// mergeAt won't attempt to delete the node if it's less than 32 bytes
