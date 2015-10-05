@@ -119,10 +119,15 @@ void MemoryDB::kill(h256 const& _h)
 	ReadGuard l(x_this);
 #endif
 	if (m_main.find(_h) != m_main.end())
+	{
 		m_main[_h].second--;
+		cout << "kill existing: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
+	}
 	else
+	{
 		m_main[_h] = make_pair(string(), -1);
-	cout << "kill: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
+		cout << "kill non existing: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
+	}
 }
 
 bytes MemoryDB::lookupAux(h256 const& _h) const
