@@ -110,7 +110,7 @@ void MemoryDB::insert(h256 const& _h, bytesConstRef _v)
 #if ETH_PARANOIA
 	dbdebug << "INST" << _h << "=>" << m_main[_h].second;
 #endif
-	cout << "insert: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
+	//cout << "insert: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
 }
 
 void MemoryDB::kill(h256 const& _h)
@@ -121,12 +121,12 @@ void MemoryDB::kill(h256 const& _h)
 	if (m_main.find(_h) != m_main.end())
 	{
 		m_main[_h].second--;
-		cout << "kill existing: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
+		//cout << "kill existing: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
 	}
 	else
 	{
 		m_main[_h] = make_pair(string(), -1);
-		cout << "kill non existing: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
+		//cout << "kill non existing: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
 	}
 }
 

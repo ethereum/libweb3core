@@ -368,7 +368,7 @@ int OverlayDB::increaseRefCount(h256 const& _h,ldb::WriteBatch& _batch, int _add
 		if (!_revert)
 			m_changes[m_blockNumber][_h] += _addedRefCount;
 	}
-	cout << "new ODB refcount for: " << _h << " is " << refCountNumber << " change: " << _addedRefCount << " revert: " << _revert << endl;
+	//cout << "new ODB refcount for: " << _h << " is " << refCountNumber << " change: " << _addedRefCount << " revert: " << _revert << endl;
 	return refCountNumber;
 }
 #endif // PRUNING
