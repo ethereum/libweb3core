@@ -65,12 +65,15 @@ std::string MemoryDB::lookup(h256 const& _h) const
 	auto it = m_main.find(_h);
 	if (it != m_main.end())
 	{
-		if (m_enforceRefs && it->second.second <= 0)
+		if (m_enforceRefs && it->second.second == 0)
 		{
 			cwarn << "Lookup required for value with refcount "<< it->second.second << " in MemoryDB " << _h;
 			it->second.second++;
+			cout << "lookup with refcount <= 0: " << _h << "newMemDBRefcount: " << m_main[_h].second << endl;
+			return it->second.first;
 		}
-
+		else if (m_enforceRefs && it->second.second < 0)
+			cwarn << "Lookup required for value with refcount smaller zero "<< it->second.second << " in MemoryDB " << _h;
 		return it->second.first;
 	}
 
@@ -107,6 +110,7 @@ void MemoryDB::insert(h256 const& _h, bytesConstRef _v)
 #if ETH_PARANOIA
 	dbdebug << "INST" << _h << "=>" << m_main[_h].second;
 #endif
+	cout << "insert: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
 }
 
 void MemoryDB::kill(h256 const& _h)
@@ -114,13 +118,11 @@ void MemoryDB::kill(h256 const& _h)
 #if DEV_GUARDED_DB
 	ReadGuard l(x_this);
 #endif
-	if (_h == EmptyTrie)
-		return;
-
-	if (m_main.count(_h))
+	if (m_main.find(_h) != m_main.end())
 		m_main[_h].second--;
 	else
 		m_main[_h] = make_pair(string(), -1);
+	cout << "kill: " << _h << " newMemDBRefcount: " << m_main[_h].second << endl;
 }
 
 bytes MemoryDB::lookupAux(h256 const& _h) const

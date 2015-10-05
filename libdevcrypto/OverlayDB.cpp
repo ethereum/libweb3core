@@ -146,6 +146,7 @@ void OverlayDB::commit(u256 _blockNumber)
 				m_changes.erase(m_blockNumber - PRUNING);
 			}
 #endif
+			cout << "safe batch (commit) at block " << _blockNumber << endl;
 			safeWrite(batch);
 		}
 		{
@@ -178,6 +179,7 @@ bytes OverlayDB::lookupAux(h256 const& _h) const
 
 void OverlayDB::rollback()
 {
+	cout << "rollback" << endl;
 #if DEV_GUARDED_DB
 	DEV_WRITE_GUARDED(x_this)
 #endif
@@ -287,6 +289,9 @@ void OverlayDB::insert(h256 const& _h, bytesConstRef _v)
 
 void OverlayDB::kill(h256 const& _h)
 {
+	if (_h == EmptyTrie)
+		return;
+
 	MemoryDB::kill(_h);
 }
 
@@ -363,6 +368,7 @@ int OverlayDB::increaseRefCount(h256 const& _h,ldb::WriteBatch& _batch, int _add
 		if (!_revert)
 			m_changes[m_blockNumber][_h] += _addedRefCount;
 	}
+	cout << "new ODB refcount for: " << _h << " is " << refCountNumber << " change: " << _addedRefCount << " revert: " << _revert << endl;
 	return refCountNumber;
 }
 #endif // PRUNING

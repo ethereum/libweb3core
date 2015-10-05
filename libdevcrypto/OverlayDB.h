@@ -28,7 +28,7 @@
 #include <libdevcore/MemoryDB.h>
 //#include <libdevcore/Guards.h>
 
-#define PRUNING 10000
+#define PRUNING 10
 
 namespace dev
 {
@@ -67,6 +67,7 @@ private:
 
 	static std::map<u256, std::set<h256> > m_deathrow;
 	static std::map<u256, std::unordered_map<h256, int > > m_changes;
+public:
 	static u256 m_blockNumber; //updated in commit()
 #endif
 
