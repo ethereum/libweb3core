@@ -239,6 +239,8 @@ int main(int argc, char** argv)
 			encoding = Encoding::Base64;
 		else if (arg == "-b" || arg == "--bin" || arg == "--base-256")
 			encoding = Encoding::Binary;
+		else if (arg == "-e" || arg == "--encrypt")
+			encrypt = true;
 		else if (inputFile.empty())
 			inputFile = arg;
 		else
@@ -351,11 +353,18 @@ int main(int argc, char** argv)
 		}
 		case Mode::AssembleArchive:
 		{
+			strings addedInputs;
+			for (auto i: otherInputs)
+				if (!boost::filesystem::is_regular_file(i))
+					cerr << "Skipped " << i << std::endl;
+				else
+					addedInputs.push_back(i);
+
 			if (boost::filesystem::is_directory(inputFile))
 			{
 				js::mArray entries;
 				auto basePath = boost::filesystem::canonical(boost::filesystem::path(inputFile)).string();
-				for (auto const& i: otherInputs)
+				for (auto const& i: addedInputs)
 				{
 					js::mObject entry;
 					auto iPath = boost::filesystem::canonical(boost::filesystem::path(i)).string();
@@ -372,9 +381,9 @@ int main(int argc, char** argv)
 				in = asBytes(os);
 			}
 			// input is a manifest file
-			RLPStream r(otherInputs.size() + 1);
+			RLPStream r(addedInputs.size() + 1);
 			r.append(in);
-			for (auto i: otherInputs)
+			for (auto i: addedInputs)
 				r.append(contents(i));
 			putOut(r.out(), encoding, encrypt, quiet);
 			break;
