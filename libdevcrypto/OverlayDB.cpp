@@ -66,8 +66,6 @@ void OverlayDB::commit(u256 _blockNumber)
 		u256 tmpBlockNumber = _blockNumber;
 		while (_blockNumber && m_changes.find(tmpBlockNumber) != m_changes.end())
 		{
-			cnote << "CHAIN REORG AT BLOCK: " << _blockNumber;
-			cnote << "reverting changes of block " << tmpBlockNumber;
 			for (auto& i : m_changes[_blockNumber])
 				increaseRefCount(i.first, batchR, -i.second, true);
 
@@ -77,7 +75,6 @@ void OverlayDB::commit(u256 _blockNumber)
 			tmpBlockNumber++;
 		}
 #endif
-
 		ldb::WriteBatch batch;
 
 #if DEV_GUARDED_DB
@@ -102,13 +99,6 @@ void OverlayDB::commit(u256 _blockNumber)
 					int newRefCount = increaseRefCount(_h, batch, i.second.second);
 					if (newRefCount <= 0)
 						m_deathrow[m_blockNumber].insert(_h);
-					if (newRefCount < 0)
-					{
-						cwarn << "REFCOUNT SMALLER THAN ZERO, that means we re-kill a node which is not used by anyone!? Who is asking for that node? Probably a critical trie issue";
-						cwarn << "hash: " << i.first ;
-						cwarn << "previous refcount: " << getRefCount(i.first) << " now add: " << i.second.second;
-						cwarn << "so the new refcount is: " << newRefCount;
-					}
 #endif
 				}
 			}
@@ -146,7 +136,6 @@ void OverlayDB::commit(u256 _blockNumber)
 				m_changes.erase(m_blockNumber - PRUNING);
 			}
 #endif
-			cout << "safe batch (commit) at block " << _blockNumber << endl;
 			safeWrite(batch);
 		}
 		{
@@ -179,7 +168,6 @@ bytes OverlayDB::lookupAux(h256 const& _h) const
 
 void OverlayDB::rollback()
 {
-	cout << "rollback" << endl;
 #if DEV_GUARDED_DB
 	DEV_WRITE_GUARDED(x_this)
 #endif
@@ -214,8 +202,6 @@ std::string OverlayDB::lookup(h256 const& _h) const
 		DEV_WRITE_GUARDED(x_this)
 #endif
 		{
-			cwarn << "Lookup required for value with refcount " << getRefCount(_h) << " in OverlayDB " << _h;
-
 			increaseRefCount(_h, batch);
 			safeWrite(batch);
 
@@ -313,7 +299,6 @@ void OverlayDB::safeWrite(ldb::WriteBatch& _batch) const
 			if (m_blockNumber == 0)
 				break;
 #endif
-
 			if (m_db && o.ok())
 				break;
 			if (i == 9)
@@ -368,7 +353,6 @@ int OverlayDB::increaseRefCount(h256 const& _h,ldb::WriteBatch& _batch, int _add
 		if (!_revert)
 			m_changes[m_blockNumber][_h] += _addedRefCount;
 	}
-	//cout << "new ODB refcount for: " << _h << " is " << refCountNumber << " change: " << _addedRefCount << " revert: " << _revert << endl;
 	return refCountNumber;
 }
 #endif // PRUNING

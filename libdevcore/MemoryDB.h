@@ -48,7 +48,7 @@ public:
 
 	MemoryDB& operator=(MemoryDB const& _c);
 
-	void clear() {std::cout << "clear MDB\n"; m_main.clear(); m_aux.clear(); }	// WARNING !!!! didn't originally clear m_refCount!!!
+	void clear() { m_main.clear(); m_aux.clear(); }	// WARNING !!!! didn't originally clear m_refCount!!!
 	std::unordered_map<h256, std::string> get() const;
 
 	std::string lookup(h256 const& _h) const;
@@ -67,7 +67,7 @@ protected:
 #if DEV_GUARDED_DB
 	mutable SharedMutex x_this;
 #endif
-	mutable std::unordered_map<h256, std::pair<std::string, int>> m_main;
+	std::unordered_map<h256, std::pair<std::string, int>> m_main;
 	std::unordered_map<h256, std::pair<bytes, bool>> m_aux;
 
 	mutable bool m_enforceRefs = true;
