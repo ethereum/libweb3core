@@ -24,6 +24,7 @@
 #include <chrono>
 #include <thread>
 #include "Log.h"
+#include <libdevcore/Exceptions.h>
 using namespace std;
 using namespace dev;
 
@@ -55,6 +56,10 @@ void Worker::startWorking()
 					startedWorking();
 					workLoop();
 					doneWorking();
+				}
+				catch (Exception const& _e)
+				{
+					clog(WarnChannel) << "Exception thrown in Worker thread: " << diagnostic_information(_e);
 				}
 				catch (std::exception const& _e)
 				{
