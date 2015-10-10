@@ -22,10 +22,13 @@
 #include <fstream>
 #include <iostream>
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/SHA3.h>
+#include <libdevcrypto/Common.h>
+#include <libdevcrypto/CryptoPP.h>
 using namespace std;
 using namespace dev;
 namespace js = json_spirit;
@@ -33,9 +36,10 @@ namespace js = json_spirit;
 void help()
 {
 	cout
-		<< "Usage rlp [OPTIONS] [ <file> | -- ]" << endl
-		<< "Options:" << endl
-		<< "    -r,--render  Render the given RLP. Options:" << endl
+		<< "Usage rlp <mode> [OPTIONS]" << endl
+		<< "Modes:" << endl
+		<< "    create <json>  Given a simplified JSON string, output the RLP." << endl
+		<< "    render [ <file> | -- ]  Render the given RLP. Options:" << endl
 		<< "      --indent <string>  Use string as the level indentation (default '  ')." << endl
 		<< "      --hex-ints  Render integers in hex." << endl
 		<< "      --string-ints  Render integers in the same way as strings." << endl
@@ -43,15 +47,19 @@ void help()
 		<< "      --force-string  Force all data to be rendered as C-style strings." << endl
 		<< "      --force-escape  When rendering as C-style strings, force all characters to be escaped." << endl
 		<< "      --force-hex  Force all data to be rendered as raw hex." << endl
-		<< "    -l,--list-archive  List the items in the RLP list by hash and size." << endl
-		<< "    -e,--extract-archive  Extract all items in the RLP list, named by hash." << endl
-		<< "    -c,--create  Given a simplified JSON string, output the RLP." << endl
+		<< "    list [ <file> | -- ]  List the items in the RLP list by hash and size." << endl
+		<< "    extract [ <file> | -- ]  Extract all items in the RLP list, named by hash." << endl
+		<< "    assemble [ <manifest> | <base path> ] <file> ...  Given a manifest & files, output the RLP." << endl
+		<< "      -D,--dapp  Dapp-building mode; equivalent to --encrypt --64." << endl
+		<< endl
 		<< "General options:" << endl
+		<< "    -e,--encrypt  Encrypt the RLP data prior to output." << endl
 		<< "    -L,--lenience  Try not to bomb out early if possible." << endl
 		<< "    -x,--hex,--base-16  Treat input RLP as hex encoded data." << endl
 		<< "    -k,--keccak  Output Keccak-256 hash only." << endl
 		<< "    --64,--base-64  Treat input RLP as base-64 encoded data." << endl
 		<< "    -b,--bin,--base-256  Treat input RLP as raw binary data." << endl
+		<< "    -q,--quiet  Don't place additional information on stderr." << endl
 		<< "    -h,--help  Print this help message and exit." << endl
 		<< "    -V,--version  Show the version and exit." << endl
 		;
@@ -65,6 +73,7 @@ void version()
 }
 
 enum class Mode {
+	AssembleArchive,
 	ListArchive,
 	ExtractArchive,
 	Render,
@@ -145,12 +154,43 @@ private:
 	Prefs m_prefs;
 };
 
+void putOut(bytes _out, Encoding _encoding, bool _encrypt, bool _quiet)
+{
+	dev::h256 h = dev::sha3(_out);
+	if (_encrypt)
+	{
+		crypto::Secp256k1PP encrypter;
+		encrypter.encrypt(toPublic(Secret(h)), _out);
+	}
+	if (!_quiet)
+		cerr << "Keccak of RLP: " << h.hex() << endl;
+
+	switch (_encoding)
+	{
+	case Encoding::Hex: case Encoding::Auto:
+		cout << toHex(_out) << endl;
+		break;
+	case Encoding::Base64:
+		cout << toBase64(&_out) << endl;
+		break;
+	case Encoding::Binary:
+		cout.write((char const*)_out.data(), _out.size());
+		break;
+	case Encoding::Keccak:
+		cout << sha3(_out).hex() << endl;
+		break;
+	}
+}
+
 int main(int argc, char** argv)
 {
 	Encoding encoding = Encoding::Auto;
 	Mode mode = Mode::Render;
-	string inputFile = "--";
+	string inputFile;
+	strings otherInputs;
 	bool lenience = false;
+	bool quiet = false;
+	bool encrypt = false;
 	RLPStreamer::Prefs prefs;
 
 	for (int i = 1; i < argc; ++i)
@@ -158,11 +198,11 @@ int main(int argc, char** argv)
 		string arg = argv[i];
 		if (arg == "-h" || arg == "--help")
 			help();
-		else if (arg == "-r" || arg == "--render")
+		else if (arg == "render")
 			mode = Mode::Render;
-		else if (arg == "-c" || arg == "--create")
+		else if (arg == "create")
 			mode = Mode::Create;
-		else if ((arg == "-i" || arg == "--indent") && argc > i)
+		else if ((arg == "-i" || arg == "--indent") && i + 1 < argc)
 			prefs.indent = argv[++i];
 		else if (arg == "--hex-ints")
 			prefs.hexInts = true;
@@ -178,14 +218,20 @@ int main(int argc, char** argv)
 			prefs.escapeAll = true;
 		else if (arg == "-n" || arg == "--nice")
 			prefs.forceString = true, prefs.stringInts = false, prefs.forceHex = false, prefs.indent = "  ";
-		else if (arg == "-l" || arg == "--list-archive")
+		else if (arg == "list")
 			mode = Mode::ListArchive;
-		else if (arg == "-e" || arg == "--extract-archive")
+		else if (arg == "extract")
 			mode = Mode::ExtractArchive;
+		else if (arg == "assemble")
+			mode = Mode::AssembleArchive;
 		else if (arg == "-L" || arg == "--lenience")
 			lenience = true;
+		else if (arg == "-D" || arg == "--dapp")
+			encrypt = true, encoding = Encoding::Base64;
 		else if (arg == "-V" || arg == "--version")
 			version();
+		else if (arg == "-q" || arg == "--quiet")
+			quiet = true;
 		else if (arg == "-x" || arg == "--hex" || arg == "--base-16")
 			encoding = Encoding::Hex;
 		else if (arg == "-k" || arg == "--keccak")
@@ -194,20 +240,26 @@ int main(int argc, char** argv)
 			encoding = Encoding::Base64;
 		else if (arg == "-b" || arg == "--bin" || arg == "--base-256")
 			encoding = Encoding::Binary;
-		else
+		else if (arg == "-e" || arg == "--encrypt")
+			encrypt = true;
+		else if (inputFile.empty())
 			inputFile = arg;
+		else
+			otherInputs.push_back(arg);
 	}
 
 	bytes in;
 	if (inputFile == "--")
 		for (int i = cin.get(); i != -1; i = cin.get())
 			in.push_back((byte)i);
-	else
+	else if (boost::filesystem::is_regular_file(inputFile))
 		in = contents(inputFile);
+	else
+		in = asBytes(inputFile);
 
 	bytes b;
 
-	if (mode != Mode::Create)
+	if (mode != Mode::Create && mode != Mode::AssembleArchive)
 	{
 		if (encoding == Encoding::Auto)
 		{
@@ -217,7 +269,7 @@ int main(int argc, char** argv)
 				{
 					if (encoding == Encoding::Hex && (b < '0' || b > '9' ) && (b < 'a' || b > 'f' ) && (b < 'A' || b > 'F' ))
 					{
-						cerr << "'" << b << "':" << (int)b << endl;
+//						cerr << "'" << b << "':" << (int)b << endl;
 						encoding = Encoding::Base64;
 					}
 					if (encoding == Encoding::Base64 && (b < '0' || b > '9' ) && (b < 'a' || b > 'z' ) && (b < 'A' || b > 'Z' ) && b != '+' && b != '/')
@@ -300,6 +352,56 @@ int main(int argc, char** argv)
 			}
 			break;
 		}
+		case Mode::AssembleArchive:
+		{
+			if (boost::filesystem::is_directory(inputFile))
+			{
+				js::mArray entries;
+				auto basePath = boost::filesystem::canonical(boost::filesystem::path(inputFile)).string();
+				for (string& i: otherInputs)
+				{
+					js::mObject entry;
+					strings parsed;
+					boost::algorithm::split(parsed, i, boost::is_any_of(","));
+					i = parsed[0];
+					for (unsigned j = 1; j < parsed.size(); ++j)
+					{
+						strings nv;
+						boost::algorithm::split(nv, parsed[j], boost::is_any_of(":"));
+						if (nv.size() == 2)
+							entry[nv[0]] = nv[1];
+						else{} // TODO: error
+					}
+					if (!entry.count("path"))
+					{
+						std::string path = boost::filesystem::canonical(boost::filesystem::path(parsed[0])).string().substr(basePath.size());
+						if (path == "/index.html")
+							path = "/";
+						entry["path"] = path;
+					}
+					entry["hash"] = toHex(dev::sha3(contents(parsed[0])).ref());
+					entries.push_back(entry);
+				}
+				js::mObject o;
+				o["entries"] = entries;
+				auto os = js::write_string(js::mValue(o), false);
+				in = asBytes(os);
+			}
+
+			strings addedInputs;
+			for (auto i: otherInputs)
+				if (!boost::filesystem::is_regular_file(i))
+					cerr << "Skipped " << i << std::endl;
+				else
+					addedInputs.push_back(i);
+
+			RLPStream r(addedInputs.size() + 1);
+			r.append(in);
+			for (auto i: addedInputs)
+				r.append(contents(i));
+			putOut(r.out(), encoding, encrypt, quiet);
+			break;
+		}
 		case Mode::Render:
 		{
 			RLPStreamer s(cout, prefs);
@@ -364,21 +466,7 @@ int main(int argc, char** argv)
 						exit(1);
 				}
 			}
-			switch (encoding)
-			{
-			case Encoding::Hex: case Encoding::Auto:
-				cout << toHex(out.out()) << endl;
-				break;
-			case Encoding::Base64:
-				cout << toBase64(&out.out()) << endl;
-				break;
-			case Encoding::Binary:
-				cout.write((char const*)out.out().data(), out.out().size());
-				break;
-			case Encoding::Keccak:
-				cout << sha3(out.out()).hex() << endl;
-				break;
-			}
+			putOut(out.out(), encoding, encrypt, quiet);
 			break;
 		}
 		default:;
