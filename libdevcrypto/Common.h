@@ -33,14 +33,6 @@
 namespace dev
 {
 
-//struct DB_settings
-//{
-//	DB_settings(std::string _path, unsigned _pruningDepth = 0): m_path(_path), m_pruningDepth(_pruningDepth){}
-
-//	unsigned m_pruningDepth;
-//	std::string m_path;
-//};
-
 using Secret = SecureFixedHash<32>;
 
 /// A public key: 64 bytes.

@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(basicUsage)
 	ldb::Status status = ldb::DB::Open(o, td.path(), &db);
 	BOOST_REQUIRE(status.ok() && db);
 
-	OverlayDB odb(db);
+	OverlayDB odb(db, 1);
 	BOOST_CHECK(!odb.get().size());
 
 	// commit nothing
@@ -64,6 +64,8 @@ BOOST_AUTO_TEST_CASE(basicUsage)
 	BOOST_CHECK(odb.exists(h256(41)));
 	BOOST_CHECK_EQUAL(odb.lookup(h256(41)), toString(value[0]));
 	odb.kill(h256(41));
+	odb.commit(3);
+	odb.commit(4);
 	BOOST_CHECK(!odb.exists(h256(41)));
 	BOOST_CHECK_EQUAL(odb.lookup(h256(41)), string());
 }
