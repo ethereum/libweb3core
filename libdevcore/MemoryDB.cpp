@@ -120,7 +120,7 @@ bytes MemoryDB::lookupAux(h256 const& _h) const
 	ReadGuard l(x_this);
 #endif
 	auto it = m_aux.find(_h);
-	if (it != m_aux.end() && (!m_enforceRefs || it->second.second))
+	if (it != m_aux.end() && (!m_enforceRefs || it->second.second > 0))
 		return it->second.first;
 	return bytes();
 }
@@ -147,7 +147,7 @@ void MemoryDB::purge()
 	WriteGuard l(x_this);
 #endif
 	for (auto it = m_main.begin(); it != m_main.end(); )
-		if (it->second.second)
+		if (it->second.second > 0)
 			++it;
 		else
 			it = m_main.erase(it);
@@ -160,7 +160,7 @@ h256Hash MemoryDB::keys() const
 #endif
 	h256Hash ret;
 	for (auto const& i: m_main)
-		if (i.second.second)
+		if (i.second.second > 0)
 			ret.insert(i.first);
 	return ret;
 }
