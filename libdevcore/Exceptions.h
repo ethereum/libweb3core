@@ -22,6 +22,7 @@
 #pragma once
 
 #include <exception>
+#include <system_error>
 #include <string>
 #include <boost/exception/exception.hpp>
 #include <boost/exception/info.hpp>
