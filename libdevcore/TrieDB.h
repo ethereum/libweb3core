@@ -29,6 +29,7 @@
 #include "SHA3.h"
 #include "MemoryDB.h"
 #include "TrieCommon.h"
+#include <libdevcrypto/OverlayDB.h>
 
 namespace dev
 {
@@ -96,7 +97,7 @@ public:
 	/// True if the trie is initialised but empty (i.e. that the DB contains the root node which is empty).
 	bool isEmpty() const { return m_root == c_shaNull && node(m_root).size(); }
 
-	h256 const& root() const { if (node(m_root).empty()) BOOST_THROW_EXCEPTION(BadRoot(m_root)); /*std::cout << "Returning root as " << ret << " (really " << m_root << ")" << std::endl;*/ return m_root; }	// patch the root in the case of the empty trie. TODO: handle this properly.
+	h256 const& root() const { if (node(m_root).empty()) {BOOST_THROW_EXCEPTION(BadRoot() << errinfo_hash256(m_root) );} return m_root; }	// patch the root in the case of the empty trie. TODO: handle this properly.
 
 	std::string at(bytes const& _key) const { return at(&_key); }
 	std::string at(bytesConstRef _key) const;
@@ -106,8 +107,8 @@ public:
 	void insert(bytesConstRef _key, bytesConstRef _value);
 	void remove(bytes const& _key) { remove(&_key); }
 	void remove(bytesConstRef _key);
-	bool contains(bytes const& _key) { return contains(&_key); }
-	bool contains(bytesConstRef _key) { return !at(_key).empty(); }
+	bool contains(bytes const& _key) const { return contains(&_key); }
+	bool contains(bytesConstRef _key) const { return !at(_key).empty(); }
 
 	class iterator
 	{
@@ -763,7 +764,8 @@ template <class DB> void GenericTrieDB<DB>::insert(bytesConstRef _key, bytesCons
 #endif
 
 	std::string rootValue = node(m_root);
-	assert(rootValue.size());
+	if (!rootValue.size())
+		BOOST_THROW_EXCEPTION(RootNotFound() << errinfo_hash256(m_root));
 	bytes b = mergeAt(RLP(rootValue), m_root, NibbleSlice(_key), _value);
 
 	// mergeAt won't attempt to delete the node if it's less than 32 bytes
@@ -906,7 +908,8 @@ template <class DB> void GenericTrieDB<DB>::mergeAtAux(RLPStream& _out, RLP cons
 	{
 		s = node(_orig.toHash<h256>());
 		r = RLP(s);
-		assert(!r.isNull());
+		if (r.isNull())
+			BOOST_THROW_EXCEPTION(NodeNotFound() << errinfo_hash256(_orig.toHash<h256>()));
 		isRemovable = true;
 	}
 	bytes b = mergeAt(r, _k, _v, !isRemovable);

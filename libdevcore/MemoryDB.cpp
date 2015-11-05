@@ -20,6 +20,7 @@
  */
 
 #include "Common.h"
+#include "TrieDB.h"
 #include "MemoryDB.h"
 using namespace std;
 using namespace dev;
@@ -60,14 +61,16 @@ std::string MemoryDB::lookup(h256 const& _h) const
 #if DEV_GUARDED_DB
 	ReadGuard l(x_this);
 #endif
+
 	auto it = m_main.find(_h);
 	if (it != m_main.end())
 	{
-		if (!m_enforceRefs || it->second.second > 0)
-			return it->second.first;
-		else
-			cwarn << "Lookup required for value with refcount == 0. This is probably a critical trie issue" << _h;
+		if (m_enforceRefs && it->second.second == 0)
+			it->second.second++;
+
+		return it->second.first;
 	}
+
 	return std::string();
 }
 
@@ -100,33 +103,15 @@ void MemoryDB::insert(h256 const& _h, bytesConstRef _v)
 #endif
 }
 
-bool MemoryDB::kill(h256 const& _h)
+void MemoryDB::kill(h256 const& _h)
 {
 #if DEV_GUARDED_DB
 	ReadGuard l(x_this);
 #endif
-	if (m_main.count(_h))
-	{
-		if (m_main[_h].second > 0)
-		{
-			m_main[_h].second--;
-			return true;
-		}
-#if ETH_PARANOIA
-		else
-		{
-			// If we get to this point, then there was probably a node in the level DB which we need to remove and which we have previously
-			// used as part of the memory-based MemoryDB. Nothing to be worried about *as long as the node exists in the DB*.
-			dbdebug << "NOKILL-WAS" << _h;
-		}
-		dbdebug << "KILL" << _h << "=>" << m_main[_h].second;
-	}
+	if (m_main.find(_h) != m_main.end())
+		m_main[_h].second--;
 	else
-	{
-		dbdebug << "NOKILL" << _h;
-#endif
-	}
-	return false;
+		m_main[_h] = make_pair(string(), -1);
 }
 
 bytes MemoryDB::lookupAux(h256 const& _h) const
@@ -135,7 +120,7 @@ bytes MemoryDB::lookupAux(h256 const& _h) const
 	ReadGuard l(x_this);
 #endif
 	auto it = m_aux.find(_h);
-	if (it != m_aux.end() && (!m_enforceRefs || it->second.second))
+	if (it != m_aux.end() && (!m_enforceRefs || it->second.second > 0))
 		return it->second.first;
 	return bytes();
 }
@@ -162,7 +147,7 @@ void MemoryDB::purge()
 	WriteGuard l(x_this);
 #endif
 	for (auto it = m_main.begin(); it != m_main.end(); )
-		if (it->second.second)
+		if (it->second.second > 0)
 			++it;
 		else
 			it = m_main.erase(it);
@@ -175,7 +160,7 @@ h256Hash MemoryDB::keys() const
 #endif
 	h256Hash ret;
 	for (auto const& i: m_main)
-		if (i.second.second)
+		if (i.second.second > 0)
 			ret.insert(i.first);
 	return ret;
 }

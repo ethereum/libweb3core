@@ -49,18 +49,25 @@ private:
 
 /// Base class for all RLP exceptions.
 struct RLPException: virtual Exception { RLPException(std::string _message = std::string()): Exception(_message) {} };
+struct DBException: virtual Exception { DBException(std::string _message = std::string()): Exception(_message) {} };
+
 #define DEV_SIMPLE_EXCEPTION_RLP(X) struct X: virtual RLPException { const char* what() const noexcept override { return #X; } }
+#define DEV_SIMPLE_EXCEPTION_DB(X) struct X: virtual DBException { const char* what() const noexcept override { return #X; } }
+
 
 DEV_SIMPLE_EXCEPTION_RLP(BadCast);
 DEV_SIMPLE_EXCEPTION_RLP(BadRLP);
 DEV_SIMPLE_EXCEPTION_RLP(OversizeRLP);
 DEV_SIMPLE_EXCEPTION_RLP(UndersizeRLP);
 
+DEV_SIMPLE_EXCEPTION_DB(RootNotFound);
+DEV_SIMPLE_EXCEPTION_DB(BadRoot);
+DEV_SIMPLE_EXCEPTION_DB(NodeNotFound);
+
 DEV_SIMPLE_EXCEPTION(BadHexCharacter);
 DEV_SIMPLE_EXCEPTION(NoNetworking);
 DEV_SIMPLE_EXCEPTION(NoUPnPDevice);
-DEV_SIMPLE_EXCEPTION(RootNotFound);
-struct BadRoot: virtual Exception { public: BadRoot(h256 const& _root): Exception("BadRoot " + _root.hex()), root(_root) {} h256 root; };
+
 DEV_SIMPLE_EXCEPTION(FileError);
 DEV_SIMPLE_EXCEPTION(Overflow);
 DEV_SIMPLE_EXCEPTION(FailedInvariant);
@@ -83,5 +90,6 @@ using errinfo_required_h256 = boost::error_info<struct tag_required_h256, h256>;
 using errinfo_got_h256 = boost::error_info<struct tag_get_h256, h256>;
 using Hash256RequirementError = boost::tuple<errinfo_required_h256, errinfo_got_h256>;
 using errinfo_extraData = boost::error_info<struct tag_extraData, bytes>;
+using errinfo_atBlock = boost::error_info<struct tag_atBlock, u256>;
 
 }
