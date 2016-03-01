@@ -27,7 +27,6 @@ if (NOT EMSCRIPTEN)
 	add_subdirectory(libp2p)
 
 	if (TOOLS)
-		add_subdirectory(rlp)
 		add_subdirectory(bench)
 	endif()
 endif()
