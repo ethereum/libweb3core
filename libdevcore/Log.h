@@ -264,8 +264,8 @@ public:
 #define cslog(X) nslog(X)
 #else
 #if NDEBUG
-#define clog(X) DEV_STATEMENT_ONCE() if (X::debug) {} else dev::LogOutputStream<X, true>()
-#define cslog(X) DEV_STATEMENT_ONCE() if (X::debug) {} else dev::LogOutputStream<X, false>()
+#define clog(X) DEV_STATEMENT_ONCE() if (X::debug) {} else { dev::LogOutputStream<X, true>() }
+#define cslog(X) DEV_STATEMENT_ONCE() if (X::debug) {} else { dev::LogOutputStream<X, false>() }
 #else
 #define clog(X) dev::LogOutputStream<X, true>()
 #define cslog(X) dev::LogOutputStream<X, false>()
@@ -280,8 +280,8 @@ public:
 #define ctrace clog(dev::TraceChannel)
 
 // Null stream-like objects.
-#define ndebug DEV_STATEMENT_ONCE() if (true) {} else dev::NullOutputStream()
-#define nlog(X) DEV_STATEMENT_ONCE() if (true) {} else dev::NullOutputStream()
-#define nslog(X) DEV_STATEMENT_ONCE() if (true) {} else dev::NullOutputStream()
+#define ndebug DEV_STATEMENT_ONCE() if (true) {} else { dev::NullOutputStream() }
+#define nlog(X) DEV_STATEMENT_ONCE() if (true) {} else { dev::NullOutputStream() }
+#define nslog(X) DEV_STATEMENT_ONCE() if (true) {} else { dev::NullOutputStream() }
 
 }
