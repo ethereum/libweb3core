@@ -32,6 +32,9 @@
 #include "CommonData.h"
 #include "FixedHash.h"
 
+#pragma warning( push )
+#pragma warning(disable:811) //exception specification for implicitly declared virtual function
+
 namespace dev
 {
 
@@ -68,6 +71,8 @@ DEV_SIMPLE_EXCEPTION(ValueTooLarge);
 
 struct InterfaceNotSupported: virtual Exception { public: InterfaceNotSupported(std::string _f): Exception("Interface " + _f + " not supported.") {} };
 struct ExternalFunctionFailure: virtual Exception { public: ExternalFunctionFailure(std::string _f): Exception("Function " + _f + "() failed.") {} };
+
+#pragma warning( pop )
 
 // error information to be added to exceptions
 using errinfo_invalidSymbol = boost::error_info<struct tag_invalidSymbol, char>;
