@@ -453,6 +453,15 @@ private:
 		for (; _i; _i >>= 8)
 			*(b--) = (byte)_i;
 	}
+#if defined(__INTEL_COMPILER)
+	void pushInt(bigint _i, size_t _br)
+	{
+		m_out.resize(m_out.size() + _br);
+		byte* b = &m_out.back();
+		for (; _i; _i >>= 8)
+			*(b--) = _i.convert_to<byte>();
+	}
+#endif
 
 	/// Our output byte stream.
 	bytes m_out;
