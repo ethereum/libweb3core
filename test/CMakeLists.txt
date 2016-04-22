@@ -19,6 +19,9 @@ set(EXECUTABLE testweb3core)
 
 file(GLOB HEADERS "*.h")
 add_executable(${EXECUTABLE} ${SRC_LIST} ${HEADERS})
+if (WIN32)
+	target_link_libraries(${EXECUTABLE} shlwapi)
+endif()
 eth_use(${EXECUTABLE} REQUIRED Dev::devcrypto Dev::devcore Dev::p2p)
 
 # Disable Boost auto-linking, where boost libraries are automatically
