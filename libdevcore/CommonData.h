@@ -120,6 +120,69 @@ inline void toBigEndian(T _val, Out& o_out)
 		o_out[i - 1] = (typename Out::value_type)(uint8_t)v;
 	}
 }
+#ifdef __INTEL_COMPILER
+template <class Out>
+inline void toBigEndian(u256 _val, Out& o_out)
+{
+	for (auto i = o_out.size(); i != 0; _val >>= 8, i--)
+	{
+		o_out[i - 1] = (typename Out::value_type)(_val & (u256)0xff).convert_to<uint8_t>();
+	}
+}
+template <class Out>
+inline void toBigEndian(u160 _val, Out& o_out)
+{
+	for (auto i = o_out.size(); i != 0; _val >>= 8, i--)
+	{
+		o_out[i - 1] = (typename Out::value_type)(_val & (u160)0xff).convert_to<uint8_t>();
+	}
+}
+template <class Out>
+inline void toBigEndian(bigint _val, Out& o_out)
+{
+	for (auto i = o_out.size(); i != 0; _val >>= 8, i--)
+	{
+		bigint v = _val & (bigint)0xff;
+		/* bigint Special case 
+		
+		has no member "convert_to"
+  		o_out[i - 1] = (typename Out::value_type)(_val & (bigint)0xff).convert_to<uint8_t>();
+  		                                                               ^
+          detected during instantiation of "dev::bytes dev::toCompactBigEndian(T, unsigned int) [with T=dev::bigint]" at line 125 of "libweb3core/rlp/main.cpp"
+		*/
+		uint8_t vv;
+		boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>> bb;
+		
+		bb = (boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>>)v;
+		vv = (uint8_t)bb.convert_to<uint8_t>();
+		o_out[i - 1] = (typename Out::value_type)vv;
+	}
+}
+template <class Out>
+inline void toBigEndian(boost::multiprecision::number<boost::multiprecision::backends::cpp_int_backend<512U, 512U, boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>, boost::multiprecision::et_off> _val, Out& o_out)
+{
+	for (auto i = o_out.size(); i != 0; _val >>= 8, i--)
+	{
+		o_out[i - 1] = (typename Out::value_type)(_val & (boost::multiprecision::number<boost::multiprecision::backends::cpp_int_backend<512U, 512U, boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>, boost::multiprecision::et_off>)0xff).convert_to<uint8_t>();
+	}
+}
+template <class Out>
+inline void toBigEndian(boost::multiprecision::number<boost::multiprecision::backends::cpp_int_backend<64U, 64U, boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>, boost::multiprecision::et_off> _val, Out& o_out)
+{
+	for (auto i = o_out.size(); i != 0; _val >>= 8, i--)
+	{
+		o_out[i - 1] = (typename Out::value_type)(_val & (boost::multiprecision::number<boost::multiprecision::backends::cpp_int_backend<64U, 64U, boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>, boost::multiprecision::et_off>)0xff).convert_to<uint8_t>();
+	}
+}
+template <class Out>
+inline void toBigEndian(boost::multiprecision::number<boost::multiprecision::backends::cpp_int_backend<128U, 128U, boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>, boost::multiprecision::et_off> _val, Out& o_out)
+{
+	for (auto i = o_out.size(); i != 0; _val >>= 8, i--)
+	{
+		o_out[i - 1] = (typename Out::value_type)(_val & (boost::multiprecision::number<boost::multiprecision::backends::cpp_int_backend<128U, 128U, boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>, boost::multiprecision::et_off>)0xff).convert_to<uint8_t>();
+	}
+}
+#endif
 
 /// Converts a big-endian byte-stream represented on a templated collection to a templated integer value.
 /// @a _In will typically be either std::string or bytes.
